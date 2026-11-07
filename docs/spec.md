@@ -5,27 +5,55 @@ tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 
 ## Compile pipeline
 
-`write <draft> --stdout`:
+`write <draft>`:
 
-1. Load `~/.config/mail/config.toml` (paths, defaults).
+1. Load `config.toml` (paths, folders, accounts, defaults).
 2. Load the draft note's `---` frontmatter (YAML) + body.
-3. Resolve the account's `from`/`realname` from neomutt config.
+3. Resolve the account's `from`/`realname` from `[accounts.<name>]`.
 4. Optionally append a reply quote (`notmuch show` → `id:` lookup).
 5. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
    with `![[…]]` image embeds becoming inline `cid:` parts.
 6. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
    crate (`compiler` feature only, no `cli`).
 7. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
-   restore CRLF, emit to stdout.
+   restore CRLF.
+8. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
+   the account's `drafts` maildir (then write `message-id`/`status: pending` back
+   to the note).
+
+## Config schema
+
+```toml
+[paths]
+drafts = "~/kb/ops/mail/drafts"      # draft note directory
+attachments = "~/kb/attachments"
+pandoc_data = "~/.local/share/pandoc"
+
+[accounts.rmsams-gmail]
+from = "rmsams@gmail.com"
+realname = "Robert Sams"
+drafts = "~/Mail/rmsams-gmail.com/[Google Mail].Drafts"  # delivery maildir
+
+[folders]
+refs = "~/Mail/rmsams-gmail.com/Reference"
+
+[defaults]
+css = "email"
+template = "email.html"
+lua-filters = ["email"]
+```
+
+`mdmc` reads `--config PATH` (default `~/.config/mail/config.toml`). It does not
+read neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
+scheme is deferred until a second backend lands.
 
 ## Module map
 
-- `config.rs` — config.toml loading, `~` expansion, path helpers.
-- `frontmatter.rs` — `---`-delimited YAML → `Draft`.
-- `account.rs` — neomutt account discovery/parse.
+- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
+- `frontmatter.rs` — `---`-delimited YAML → `Draft`; `set_fields` in-place scalar rewrite.
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `quote.rs` — notmuch reply quoting.
-- `write.rs` — the `write` subcommand.
+- `write.rs` — the `write` subcommand (compile + maildir delivery).
 
 ## MML crate
 
@@ -41,12 +69,12 @@ angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 
 ## Deferred
 
-- `--folder` / maildir delivery (the delivery-target abstraction).
 - The `new` subcommand (draft note creation).
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
+- Non-maildir delivery backends (URI scheme).
 
 ## Open questions (from `~/kb/ops/notes/mail-generalization-rust-rewrite.md`)
 
 - Keep the MML intermediate (current choice) or assemble MIME with `mail-builder`/`melib` directly.
-- Consolidate account config across `mail.py` and `msmtp-sent.py`.
+- Consolidate account config across `mail.py` and `msmtp-sent.py` (mdmc now has its own `[accounts]`, which temporarily duplicates neomutt).
 - License choice before open-sourcing.

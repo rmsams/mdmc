@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -40,7 +41,11 @@ pub struct Config {
     #[serde(default)]
     pub paths: Paths,
     #[serde(default)]
+    pub folders: BTreeMap<String, String>,
+    #[serde(default)]
     pub defaults: Defaults,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, Account>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -52,7 +57,6 @@ pub struct Paths {
 
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct Defaults {
-    pub neomutt_config: Option<String>,
     pub css: Option<String>,
     pub template: Option<String>,
     #[serde(
@@ -61,6 +65,30 @@ pub struct Defaults {
         deserialize_with = "de_string_or_list"
     )]
     pub lua_filters: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Account {
+    pub from: Option<String>,
+    pub realname: Option<String>,
+    pub drafts: Option<String>,
+}
+
+impl Account {
+    /// The `From:` header address: `realname <from>` when a realname is set,
+    /// else the bare `from` address.
+    pub fn sender(&self) -> String {
+        let from = self.from.as_deref().unwrap_or("");
+        match self
+            .realname
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(name) => format!("{name} <{from}>"),
+            None => from.to_string(),
+        }
+    }
 }
 
 impl Config {
@@ -98,15 +126,6 @@ impl Config {
         )
     }
 
-    pub fn neomutt_dir(&self) -> PathBuf {
-        expand_home(
-            self.defaults
-                .neomutt_config
-                .as_deref()
-                .unwrap_or("~/.config/neomutt"),
-        )
-    }
-
     pub fn default_css(&self) -> Option<&str> {
         self.defaults.css.as_deref()
     }
@@ -117,5 +136,26 @@ impl Config {
 
     pub fn default_lua_filters(&self) -> &[String] {
         self.defaults.lua_filters.as_deref().unwrap_or_default()
+    }
+
+    /// Resolve a `--folder` target: a `[folders]` registry name or a literal path.
+    pub fn resolve_target_folder(&self, name: &str) -> PathBuf {
+        let raw = self.folders.get(name).map(String::as_str).unwrap_or(name);
+        expand_home(raw)
+    }
+
+    /// Look up an account by name in `[accounts]`.
+    pub fn resolve_account(&self, name: &str) -> Result<&Account, String> {
+        self.accounts.get(name).ok_or_else(|| {
+            let available = self.accounts.keys().cloned().collect::<Vec<_>>().join(", ");
+            format!(
+                "account '{name}' not found in config. Available: {}",
+                if available.is_empty() {
+                    "(none)"
+                } else {
+                    &available
+                }
+            )
+        })
     }
 }

@@ -84,3 +84,53 @@ pub fn load(text: &str) -> (Option<Draft>, &str) {
     let draft = serde_yaml::from_str::<Draft>(yaml_text).unwrap_or_default();
     (Some(draft), body)
 }
+
+/// Rewrite scalar frontmatter fields in place, preserving all other content
+/// and formatting. A key already present has its value replaced; a missing key
+/// is appended before the closing `---`. Values are written as plain scalars.
+pub fn set_fields(text: &str, fields: &[(&str, &str)]) -> String {
+    let Some(closing) = closing_line_index(text) else {
+        return text.to_string();
+    };
+    let lines: Vec<&str> = text.split('\n').collect();
+
+    let mut seen = vec![false; fields.len()];
+    let mut body: Vec<String> = Vec::new();
+    for line in &lines[1..closing] {
+        let mut replaced = false;
+        for (i, (key, value)) in fields.iter().enumerate() {
+            if line.starts_with(&format!("{key}:")) {
+                body.push(format!("{key}: {value}"));
+                seen[i] = true;
+                replaced = true;
+                break;
+            }
+        }
+        if !replaced {
+            body.push((*line).to_string());
+        }
+    }
+    for (i, (key, value)) in fields.iter().enumerate() {
+        if !seen[i] {
+            body.push(format!("{key}: {value}"));
+        }
+    }
+
+    let mut out = String::from("---\n");
+    out.push_str(&body.join("\n"));
+    out.push('\n');
+    out.push_str(&lines[closing..].join("\n"));
+    out
+}
+
+fn closing_line_index(text: &str) -> Option<usize> {
+    if !text.starts_with("---") {
+        return None;
+    }
+    for (i, line) in text.split('\n').enumerate().skip(1) {
+        if line.trim_end() == "---" {
+            return Some(i);
+        }
+    }
+    None
+}

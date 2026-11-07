@@ -1,9 +1,10 @@
-mod account;
 mod config;
 mod frontmatter;
 mod mml;
 mod quote;
 mod write;
+
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
@@ -14,6 +15,10 @@ use clap::{Parser, Subcommand};
     about = "Markdown mail compiler — compile markdown draft notes to RFC 5322 email"
 )]
 struct Cli {
+    /// Path to config.toml (default ~/.config/mail/config.toml)
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -40,12 +45,16 @@ fn main() {
     }
 
     let cli = Cli::parse();
+    let config_path = cli
+        .config
+        .unwrap_or_else(|| config::expand_home("~/.config/mail/config.toml"));
+
     let result = match cli.command {
         Command::Write {
             draft,
             stdout,
             folder,
-        } => write::write(stdout, folder, &draft),
+        } => write::write(stdout, folder, &draft, &config_path),
     };
 
     if let Err(msg) = result {
