@@ -343,14 +343,22 @@ pub fn build_mml_body(
     Ok((inner, inline.into_iter().map(|(cid, _)| cid).collect()))
 }
 
+/// Encryption parameters: the recipient email addresses and an optional
+/// self-encryption key (`--encrypt-to`).
+pub struct EncryptSpec<'a> {
+    pub recipients: &'a [String],
+    pub encrypt_to: Option<&'a str>,
+}
+
 /// Compile a full MML message (headers + blank line + MML body) to MIME bytes,
-/// injecting inline `Content-ID`s and optionally signing the body. The builder
-/// is kept in scope for the whole pipeline because the compiled `MessageBuilder`
-/// borrows the MML source.
+/// injecting inline `Content-ID`s and optionally signing and/or encrypting the
+/// body. The builder is kept in scope for the whole pipeline because the
+/// compiled `MessageBuilder` borrows the MML source.
 pub fn compile_mml(
     mml_source: &str,
     inline_cids: &[String],
     signing_key: Option<&str>,
+    encrypt: Option<EncryptSpec<'_>>,
 ) -> Result<Vec<u8>, String> {
     let compiler = MmlCompilerBuilder::new()
         .build(mml_source)
@@ -363,6 +371,9 @@ pub fn compile_mml(
     inject_content_ids(&mut builder, inline_cids);
     if let Some(key) = signing_key {
         sign_body(&mut builder, key)?;
+    }
+    if let Some(spec) = encrypt {
+        encrypt_body(&mut builder, spec.recipients, spec.encrypt_to)?;
     }
 
     builder
@@ -453,6 +464,77 @@ fn gpg_detach_sign(body: &[u8], signing_key: &str) -> Result<String, String> {
     if !out.status.success() {
         return Err(format!(
             "gpg --detach-sign failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Encrypt the message body with OpenPGP, wrapping it in `multipart/encrypted`
+/// (RFC 3156). Runs after `sign_body`, so a signed body is encrypted whole.
+fn encrypt_body(
+    builder: &mut MessageBuilder,
+    recipients: &[String],
+    encrypt_to: Option<&str>,
+) -> Result<(), String> {
+    let body = builder.body.take().ok_or("no body to encrypt")?;
+
+    let mut body_bytes = Vec::new();
+    body.clone()
+        .write_part(&mut body_bytes)
+        .map_err(|e| format!("cannot serialize body: {e}"))?;
+
+    let ciphertext = gpg_encrypt(&body_bytes, recipients, encrypt_to)?;
+
+    let version_part = MimePart::new(
+        "application/pgp-encrypted",
+        BodyPart::Text("Version: 1\n".into()),
+    );
+    let data_part = MimePart::new(
+        "application/octet-stream",
+        BodyPart::Text(ciphertext.into()),
+    );
+    let ctype =
+        ContentType::new("multipart/encrypted").attribute("protocol", "application/pgp-encrypted");
+    let encrypted = MimePart::new(ctype, BodyPart::Multipart(vec![version_part, data_part]));
+    builder.body = Some(encrypted);
+    Ok(())
+}
+
+fn gpg_encrypt(
+    body: &[u8],
+    recipients: &[String],
+    encrypt_to: Option<&str>,
+) -> Result<String, String> {
+    let mut args: Vec<String> = vec!["--encrypt".into(), "--armor".into()];
+    for r in recipients {
+        args.push("--recipient".into());
+        args.push(r.clone());
+    }
+    if let Some(key) = encrypt_to {
+        args.push("--encrypt-to".into());
+        args.push(key.to_string());
+    }
+
+    let mut child = Command::new("gpg")
+        .args(&args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("gpg failed to start: {e}"))?;
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(body)
+        .map_err(|e| format!("gpg stdin write failed: {e}"))?;
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("gpg failed: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "gpg --encrypt failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }

@@ -89,6 +89,9 @@
     "sign": {
       "type": "boolean"
     },
+    "encrypt": {
+      "type": "boolean"
+    },
     "tags": {
       "type": [
         "array",

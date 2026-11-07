@@ -56,6 +56,8 @@ pub struct Draft {
     #[serde(default)]
     pub sign: Option<bool>,
     #[serde(default)]
+    pub encrypt: Option<bool>,
+    #[serde(default)]
     pub attachments: Vec<String>,
 }
 

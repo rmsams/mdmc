@@ -74,6 +74,7 @@ pub struct Account {
     pub realname: Option<String>,
     pub drafts: Option<String>,
     pub signing_key: Option<String>,
+    pub encrypt_to: Option<String>,
 }
 
 impl Account {

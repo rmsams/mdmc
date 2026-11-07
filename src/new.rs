@@ -63,6 +63,7 @@ pub fn new(
     lua_filter: Option<String>,
     pandoc_raw: bool,
     sign: bool,
+    encrypt: bool,
     editor: bool,
 ) -> Result<(), String> {
     if let Some(fmt) = &format {
@@ -142,6 +143,9 @@ pub fn new(
     }
     if sign {
         fields.push(("sign".to_string(), Field::Bool(true)));
+    }
+    if encrypt {
+        fields.push(("encrypt".to_string(), Field::Bool(true)));
     }
     fields.push((
         "message-id".to_string(),

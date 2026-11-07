@@ -132,7 +132,7 @@ angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 Signing/encryption is a compile-time MIME transformation (RFC 3156 PGP/MIME),
 not an RFC 5322 header concern and not a send-time concern. PGP/MIME only — no
 inline-PGP. It applies to the message body, so the RFC 5322 headers are
-untouched. Signing is implemented; encryption is deferred.
+untouched.
 
 ### Intent — frontmatter
 
@@ -177,19 +177,19 @@ grammar, no pgp features), and `mail-builder` has no crypto helpers. The seam is
 `MmlCompileResult::into_msg_builder()`, which yields the `mail_builder`
 `MessageBuilder` before serialization; `MessageBuilder.body` is a public field.
 `compile_mml` keeps the builder in scope for the whole pipeline: inject inline
-`Content-ID`s (builder level, before signing), optionally sign by serializing the
-body part (`write_part`, CRLF) → `gpg --detach-sign --armor --digest-algo sha512`
-→ wrap in a `multipart/signed` `MimePart` with `protocol`/`micalg` attributes →
-serialize. `mail-builder` emits CRLF consistently, so the signed bytes verify.
+`Content-ID`s (builder level), optionally sign (serialize the body part via
+`write_part` → `gpg --detach-sign --armor --digest-algo sha512` → wrap in
+`multipart/signed`), then optionally encrypt (serialize again → `gpg --encrypt
+--armor -r <recipient> --encrypt-to <self>` → wrap in `multipart/encrypted` with
+`application/pgp-encrypted` + `application/octet-stream` parts) → serialize.
+`mail-builder` emits CRLF consistently, so the signed bytes verify.
 
 ### Schema
 
-Added an optional `sign` `boolean` to `mail-draft.schema.json`. `encrypt` is
-added with encryption support.
+Added optional `sign` and `encrypt` booleans to `mail-draft.schema.json`.
 
 ## Deferred
 
-- OpenPGP encryption (signing is implemented): `encrypt: true` → `multipart/encrypted`, plus sign-then-encrypt.
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
 - Account signature support (neomutt `signature`; currently always empty).

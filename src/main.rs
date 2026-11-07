@@ -72,6 +72,9 @@ enum Command {
         /// Sign the message with the account's signing key
         #[arg(long)]
         sign: bool,
+        /// Encrypt the message to the recipients
+        #[arg(long)]
+        encrypt: bool,
         /// Open $EDITOR on the note after writing
         #[arg(long)]
         editor: bool,
@@ -116,6 +119,7 @@ fn main() {
             lua_filter,
             pandoc_raw,
             sign,
+            encrypt,
             editor,
         } => new::new(
             &config_path,
@@ -133,6 +137,7 @@ fn main() {
             lua_filter,
             pandoc_raw,
             sign,
+            encrypt,
             editor,
         ),
         Command::Write {

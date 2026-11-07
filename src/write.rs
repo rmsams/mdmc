@@ -125,20 +125,42 @@ fn maildir_deliver(dst: &Path, message: &str, message_id: &str) -> Result<PathBu
     Ok(final_path)
 }
 
+/// Extract the bare email address from an address string (`Name <addr>` → `addr`).
+fn extract_email(addr: &str) -> &str {
+    let addr = addr.trim();
+    if let Some(start) = addr.find('<') {
+        if let Some(end) = addr.find('>') {
+            if end > start {
+                return addr[start + 1..end].trim();
+            }
+        }
+    }
+    addr
+}
+
+fn recipient_emails(to: &[String], cc: &[String], bcc: &[String]) -> Vec<String> {
+    to.iter()
+        .chain(cc)
+        .chain(bcc)
+        .map(|a| extract_email(a).to_string())
+        .collect()
+}
+
 fn compile_message(
     cfg: &Config,
     fm: &frontmatter::Draft,
     body_text: &str,
-    from_hdr: &str,
     message_id: &str,
     attachments_dir: &Path,
-    signing_key: Option<&str>,
+    acct: &config::Account,
 ) -> Result<String, String> {
     let to = &fm.to.0;
     let cc = &fm.cc.0;
     let bcc = &fm.bcc.0;
     let subject = fm.subject.as_deref().unwrap_or("").trim();
     let in_reply_to = fm.in_reply_to.as_deref().unwrap_or("").trim();
+    let from_hdr = acct.sender();
+    let signing_key = acct.signing_key.as_deref();
 
     let mut attachment_paths: Vec<PathBuf> = Vec::new();
     for raw in &fm.attachments {
@@ -175,7 +197,17 @@ fn compile_message(
     } else {
         None
     };
-    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key)?;
+    let encrypt_to = acct.encrypt_to.as_deref().or(signing_key);
+    let recipients = recipient_emails(to, cc, bcc);
+    let encrypt = if fm.encrypt.unwrap_or(false) {
+        Some(mml::EncryptSpec {
+            recipients: &recipients,
+            encrypt_to,
+        })
+    } else {
+        None
+    };
+    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key, encrypt)?;
 
     let mut message = String::from_utf8_lossy(&compiled).into_owned();
     message = message.replace("\r\n", "\n");
@@ -265,8 +297,6 @@ pub fn write(
     }
 
     let acct = cfg.resolve_account(account_name.as_deref().unwrap())?;
-    let from_hdr = acct.sender();
-    let signing_key = acct.signing_key.as_deref();
 
     let in_reply_to = fm.in_reply_to.as_deref().unwrap_or("").trim().to_string();
     let quote = fm.quote.as_deref().unwrap_or("auto").trim();
@@ -278,15 +308,7 @@ pub fn write(
         }
     }
 
-    let message = compile_message(
-        &cfg,
-        &fm,
-        &body_text,
-        &from_hdr,
-        &message_id,
-        &attachments_dir,
-        signing_key,
-    )?;
+    let message = compile_message(&cfg, &fm, &body_text, &message_id, &attachments_dir, acct)?;
 
     if stdout {
         std::io::stdout()
