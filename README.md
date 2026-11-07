@@ -1,11 +1,120 @@
 # mdmc
 
-Markdown mail compiler — a Rust reimplementation of the Python `mail` tool.
+mdmc compiles markdown draft notes into RFC 5322 email. It never sends.
 
-`mdmc` composes email from markdown draft notes. `mdmc new` creates a draft
-note; `mdmc write` compiles it to RFC 5322 via MML and either prints it to
-stdout (`--stdout`) or delivers it to a maildir. `mdmc` never sends.
+A draft note is a markdown file with YAML frontmatter that holds the envelope
+(account, subject, recipients) and the message body below it. `mdmc new`
+creates the note; `mdmc write` compiles it to MIME and delivers it to stdout, a
+named folder, or an account's drafts maildir.
 
-The compile pipeline is markdown → pandoc (custom filters, templates, CSS) →
-HTML/plain, wrapped in MML, then compiled to MIME by the `mime-meta-language`
-crate.
+## Features
+
+- Markdown body converted with pandoc: to HTML (with a template, Lua filters,
+  and a CSS theme) or to plain text.
+- An embedded email template, filter, and theme are used by default, so HTML
+  email works without extra setup. Override them per note or per config, or
+  disable them with `pandoc-raw`.
+- OpenPGP signing and encryption (PGP/MIME, RFC 3156) via gpg.
+- A message-id is assigned at `new` time and reused on every `write`, so
+  recompiling is idempotent.
+- Frontmatter is validated against a JSON Schema shipped with the binary.
+- Delivery is to stdout (`--stdout`), a `[folders]` entry (`--folder`), or the
+  account's drafts maildir. Never to an SMTP server.
+
+## Install
+
+```sh
+cargo install --path .
+```
+
+Or build the Nix package from the flake:
+
+```sh
+nix build
+```
+
+For development, use devenv:
+
+```sh
+devenv shell
+```
+
+## Usage
+
+Create a draft note:
+
+```sh
+mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format html --body "Hi **there**."
+```
+
+Compile it and print to stdout:
+
+```sh
+mdmc write hello --stdout
+```
+
+Compile it and deliver it to the account's drafts maildir:
+
+```sh
+mdmc write hello
+```
+
+Neither command sends. Run `mdmc new --help` or `mdmc write --help` for the
+full option list.
+
+## Configuration
+
+mdmc reads `--config PATH` (default `~/.config/mail/config.toml`):
+
+```toml
+[paths]
+drafts = "~/mail/drafts"             # where draft notes live
+attachments = "~/mail/attachments"   # where embedded images resolve
+pandoc_data = "~/.local/share/pandoc"
+
+[accounts.rmsams-gmail]
+from = "rmsams@gmail.com"
+realname = "Robert Sams"
+drafts = "~/Mail/example/Drafts"     # delivery maildir
+signing_key = "0x12A96FA9"           # gpg key for signing
+encrypt_to = "0x12A96FA9"            # optional; defaults to signing_key
+
+[folders]
+refs = "~/Mail/example/Reference"
+
+[defaults]
+account = "rmsams-gmail"
+css = "email"                        # name or path; html only
+template = "email.html"              # name or path
+lua-filters = ["email"]              # names or paths
+```
+
+An asset name without a `/` resolves under `pandoc_data` (filters, templates,
+and CSS themes). A value with a `/` is a path and is used directly.
+
+## Draft note format
+
+The frontmatter fields:
+
+```yaml
+---
+title: "Hello"
+type: mail-draft
+status: draft
+account: rmsams-gmail
+format: html            # text (default), html, or plain
+subject: "Hello"
+to:
+  - a@example.com
+sign: true              # optional: sign with the account's key
+encrypt: true           # optional: encrypt to the recipients
+template: email.html    # optional override
+css: email              # optional override
+lua-filter: email       # optional override
+pandoc-raw: true        # optional: skip template, filter, and css
+---
+
+Body goes here, as markdown.
+```
+
+See `docs/spec.md` for the design.
