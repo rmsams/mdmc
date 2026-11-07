@@ -96,8 +96,68 @@ mml::compiler::message::MmlCompilerBuilder::new().build(&source)?.compile()?.int
 body). The compiler adds `MIME-Version: 1.0` and a `Date` header, and re-adds
 angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 
+## Crypto (OpenPGP) — agreed design, not yet implemented
+
+Signing/encryption is a compile-time MIME transformation (RFC 3156 PGP/MIME),
+not an RFC 5322 header concern and not a send-time concern. PGP/MIME only — no
+inline-PGP. It applies to the message body, so the RFC 5322 headers are
+untouched.
+
+### Intent — frontmatter
+
+Two optional booleans, default off:
+
+```yaml
+sign: true      # multipart/signed
+encrypt: true   # multipart/encrypted
+```
+
+Both true means sign-then-encrypt (the signed structure wrapped in encrypted).
+The draft body is markdown, so intent is expressed as fields, not as MML
+directives.
+
+### Key material — config
+
+Per-account, mirroring neomutt's `pgp_sign_as`:
+
+```toml
+[accounts.rmsams-gmail]
+signing_key = "0x12A96FA9"   # gpg -u / --local-user
+encrypt_to = "0x12A96FA9"    # gpg --encrypt-to; defaults to signing_key when absent
+```
+
+`encrypt_to` adds the sender's own key as an additional session-key recipient on
+the *same* ciphertext (OpenPGP encrypts the content once with a symmetric
+session key and wraps that key once per recipient), so the single Sent copy
+remains decryptable by the sender. One ciphertext, no duplication.
+
+### gpg mapping
+
+- sign: `gpg --detach-sign --armor -u <signing_key>` → `application/pgp-signature`
+- encrypt: `gpg --encrypt --armor -r <recipient> --encrypt-to <encrypt_to || signing_key>`
+  → `application/octet-stream`
+
+(`--armor` is required: PGP/MIME parts are ASCII-armored.)
+
+### Implementation approach
+
+The `mime-meta-language` compiler has no PGP support (no `sign`/`encrypt`
+grammar, no pgp features), and `mail-builder` has no crypto helpers. The seam is
+`MmlCompileResult::into_msg_builder()`, which yields the `mail_builder`
+`MessageBuilder` before serialization; `MessageBuilder.body` is a public field.
+Flow: compile MML → `MessageBuilder` → serialize the body part (`write_part`) →
+`gpg` sign/encrypt those bytes → replace `.body` with a
+`multipart/signed`/`multipart/encrypted` `MimePart` (via `ContentType::attribute`
+for `protocol`/`micalg`) → serialize. Requires RFC 3156 CRLF canonicalization of
+the signed bytes.
+
+### Schema
+
+Add optional `sign`/`encrypt` `boolean` properties to `mail-draft.schema.json`.
+
 ## Deferred
 
+- OpenPGP sign/encrypt (agreed design above, not yet implemented).
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
 - Account signature support (neomutt `signature`; currently always empty).
