@@ -83,6 +83,9 @@
     "lua-filter": {
       "type": "string"
     },
+    "pandoc-raw": {
+      "type": "boolean"
+    },
     "tags": {
       "type": [
         "array",

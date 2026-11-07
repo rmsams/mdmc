@@ -51,6 +51,8 @@ pub struct Draft {
     pub template: Option<String>,
     #[serde(rename = "lua-filter", default)]
     pub lua_filter: Option<String>,
+    #[serde(rename = "pandoc-raw", default)]
+    pub pandoc_raw: Option<bool>,
     #[serde(default)]
     pub attachments: Vec<String>,
 }
@@ -149,10 +151,11 @@ fn closing_line_index(text: &str) -> Option<usize> {
     None
 }
 
-/// A single frontmatter field value: a scalar or a list of scalars.
+/// A single frontmatter field value: a scalar, a list of scalars, or a boolean.
 pub enum Field {
     Str(String),
     List(Vec<String>),
+    Bool(bool),
 }
 
 /// Validate a frontmatter instance against the embedded `mail-draft` schema.
@@ -180,6 +183,7 @@ pub fn to_json(fields: &[(String, Field)]) -> serde_json::Value {
                     .map(|s| serde_json::Value::String(s.clone()))
                     .collect(),
             ),
+            Field::Bool(b) => serde_json::Value::Bool(*b),
         };
         map.insert(key.clone(), v);
     }
@@ -200,6 +204,9 @@ pub fn render_note(fields: &[(String, Field)], body_text: &str) -> String {
                 for item in items {
                     yaml.push_str(&format!("  - {}\n", scalar(item)));
                 }
+            }
+            Field::Bool(b) => {
+                yaml.push_str(&format!("{key}: {}\n", if *b { "true" } else { "false" }));
             }
         }
     }

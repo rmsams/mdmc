@@ -64,13 +64,14 @@ lua-filters = ["email"]
 read neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
 scheme is deferred until a second backend lands.
 
-## Pandoc defaults — agreed design, not yet implemented
+## Pandoc defaults
 
 HTML email depends on a trio of pandoc assets: a template (`email.html`), a Lua
 filter (`email.lua`, Outlook-safe image widths), and a CSS theme (`email.css`,
 the 600px column). These are generic, so mdmc ships them embedded in the binary
-as *hidden fallback defaults*: they apply only when neither the draft's
-frontmatter nor `[defaults]` specifies an asset. They have no user-visible name.
+(`assets/pandoc/`) as *hidden fallback defaults*: they apply only when neither
+the draft's frontmatter nor `[defaults]` specifies an asset. They have no
+user-visible name.
 
 Resolution: a value containing `/` is a path (used literally); otherwise it is a
 name resolved under `paths.pandoc_data` with a per-type convention:
@@ -188,7 +189,6 @@ Add optional `sign`/`encrypt` `boolean` properties to `mail-draft.schema.json`.
 ## Deferred
 
 - OpenPGP sign/encrypt (agreed design above, not yet implemented).
-- Embedded pandoc defaults + `pandoc-raw` (agreed design above, not yet implemented).
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
 - Account signature support (neomutt `signature`; currently always empty).

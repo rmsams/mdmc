@@ -66,6 +66,9 @@ enum Command {
         /// Pandoc lua-filter name or path
         #[arg(long = "lua-filter")]
         lua_filter: Option<String>,
+        /// Use vanilla pandoc (no template/filter/css)
+        #[arg(long = "pandoc-raw")]
+        pandoc_raw: bool,
         /// Open $EDITOR on the note after writing
         #[arg(long)]
         editor: bool,
@@ -108,6 +111,7 @@ fn main() {
             css,
             template,
             lua_filter,
+            pandoc_raw,
             editor,
         } => new::new(
             &config_path,
@@ -123,6 +127,7 @@ fn main() {
             css,
             template,
             lua_filter,
+            pandoc_raw,
             editor,
         ),
         Command::Write {

@@ -61,6 +61,7 @@ pub fn new(
     css: Option<String>,
     template: Option<String>,
     lua_filter: Option<String>,
+    pandoc_raw: bool,
     editor: bool,
 ) -> Result<(), String> {
     if let Some(fmt) = &format {
@@ -134,6 +135,9 @@ pub fn new(
     }
     if let Some(lua_filter) = &lua_filter {
         fields.push(("lua-filter".to_string(), Field::Str(lua_filter.clone())));
+    }
+    if pandoc_raw {
+        fields.push(("pandoc-raw".to_string(), Field::Bool(true)));
     }
     fields.push((
         "message-id".to_string(),

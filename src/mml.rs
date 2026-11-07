@@ -13,6 +13,45 @@ use crate::frontmatter::Draft;
 
 const IMAGE_EXTS: [&str; 8] = ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "tiff"];
 
+const EMBEDDED_TEMPLATE: &str = include_str!("../assets/pandoc/email.html");
+const EMBEDDED_FILTER: &str = include_str!("../assets/pandoc/email.lua");
+const EMBEDDED_CSS: &str = include_str!("../assets/pandoc/email.css");
+
+/// Write a temporary file containing `content`, returning its path.
+fn write_temp(content: &str, ext: &str) -> Result<PathBuf, String> {
+    let path = std::env::temp_dir().join(format!("mdmc-{}.{}", Uuid::new_v4(), ext));
+    std::fs::write(&path, content).map_err(|e| format!("cannot write temp file: {e}"))?;
+    Ok(path)
+}
+
+/// Resolve a filter name/path to a pandoc argument: a path is used literally,
+/// a name resolves under `pandoc_data/filters/<name>.lua`.
+fn resolve_filter(f: &str, pandoc_data: &Path) -> String {
+    if f.contains('/') {
+        f.to_string()
+    } else {
+        pandoc_data
+            .join("filters")
+            .join(format!("{f}.lua"))
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+/// Resolve a template name/path: a path is used literally, a name resolves
+/// under `pandoc_data/templates/<name>` (no extension appended).
+fn resolve_template(t: &str, pandoc_data: &Path) -> String {
+    if t.contains('/') {
+        t.to_string()
+    } else {
+        pandoc_data
+            .join("templates")
+            .join(t)
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
 fn embed_obsidian() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]").expect("static regex"))
@@ -84,90 +123,91 @@ fn inline_part(path: &Path) -> String {
 }
 
 /// Run pandoc `markdown → fmt`, applying lua filters, template, and (html only)
-/// the CSS theme, mirroring the Python `pandoc()` helper.
+/// the CSS theme. When the draft and config specify none, the embedded
+/// `email.*` defaults apply; `pandoc-raw` disables all three.
 pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<String, String> {
     let pandoc_data = cfg.paths_pandoc_data();
+    let raw = draft.pandoc_raw.unwrap_or(false);
     let mut args: Vec<String> = vec!["-f".into(), "markdown".into(), "-t".into(), fmt.into()];
+    let mut tmp_files: Vec<PathBuf> = Vec::new();
 
-    let fm_filter = draft.lua_filter.as_deref().unwrap_or("").trim();
-    let filters: Vec<String> = if !fm_filter.is_empty() {
-        vec![fm_filter.to_string()]
-    } else {
-        cfg.default_lua_filters().to_vec()
-    };
-    for f in filters {
-        let f = f.trim();
-        if f.is_empty() {
-            continue;
+    if !raw {
+        // Lua filters: draft `lua-filter` (single) overrides the config
+        // `lua-filters` (list); when neither is set, the embedded filter runs.
+        let fm_filter = draft
+            .lua_filter
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if let Some(f) = fm_filter {
+            args.push("--lua-filter".into());
+            args.push(resolve_filter(f, &pandoc_data));
+        } else if !cfg.default_lua_filters().is_empty() {
+            for f in cfg.default_lua_filters() {
+                let f = f.trim();
+                if f.is_empty() {
+                    continue;
+                }
+                args.push("--lua-filter".into());
+                args.push(resolve_filter(f, &pandoc_data));
+            }
+        } else {
+            let p = write_temp(EMBEDDED_FILTER, "lua")?;
+            tmp_files.push(p.clone());
+            args.push("--lua-filter".into());
+            args.push(p.to_string_lossy().into_owned());
         }
-        let resolved = if f.contains('/') {
-            f.to_string()
-        } else {
-            pandoc_data
-                .join("filters")
-                .join(format!("{f}.lua"))
-                .to_string_lossy()
-                .into_owned()
-        };
-        args.push("--lua-filter".into());
-        args.push(resolved);
-    }
 
-    let template = draft
-        .template
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            cfg.default_template()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-        });
-    if let Some(template) = template {
-        let resolved = if template.contains('/') {
-            template.to_string()
-        } else {
-            pandoc_data
-                .join("templates")
-                .join(template)
-                .to_string_lossy()
-                .into_owned()
-        };
-        args.push("--template".into());
-        args.push(resolved);
-    }
-
-    let mut css_tmp: Option<PathBuf> = None;
-    if fmt == "html" {
-        let css = draft
-            .css
+        // Template: draft overrides config; when neither is set, the embedded
+        // template runs.
+        let template = draft
+            .template
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .or_else(|| cfg.default_css().map(str::trim).filter(|s| !s.is_empty()));
-        if let Some(css) = css {
-            let resolved_css =
-                if css.starts_with("http://") || css.starts_with("https://") || css.contains('/') {
-                    css.to_string()
-                } else {
-                    pandoc_data
+            .or_else(|| {
+                cfg.default_template()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            });
+        match template {
+            Some(t) => {
+                args.push("--template".into());
+                args.push(resolve_template(t, &pandoc_data));
+            }
+            None => {
+                let p = write_temp(EMBEDDED_TEMPLATE, "html")?;
+                tmp_files.push(p.clone());
+                args.push("--template".into());
+                args.push(p.to_string_lossy().into_owned());
+            }
+        }
+
+        // CSS (html only): draft overrides config; when neither is set, the
+        // embedded theme is inlined.
+        if fmt == "html" {
+            let css = draft
+                .css
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .or_else(|| cfg.default_css().map(str::trim).filter(|s| !s.is_empty()));
+            let style = match css {
+                Some(c) if c.starts_with("http://") || c.starts_with("https://") => String::new(),
+                Some(c) if c.contains('/') => std::fs::read_to_string(c).unwrap_or_default(),
+                Some(c) => {
+                    let path = pandoc_data
                         .join("css")
                         .join("themes")
-                        .join(format!("{css}.css"))
-                        .to_string_lossy()
-                        .into_owned()
-                };
-            let style = if css.starts_with("http://") || css.starts_with("https://") {
-                String::new()
-            } else {
-                std::fs::read_to_string(&resolved_css).unwrap_or_default()
+                        .join(format!("{c}.css"));
+                    std::fs::read_to_string(path).unwrap_or_default()
+                }
+                None => EMBEDDED_CSS.to_string(),
             };
-            let tmp = std::env::temp_dir().join(format!("mdmc-css-{}.html", Uuid::new_v4()));
-            std::fs::write(&tmp, format!("<style>{style}</style>"))
-                .map_err(|e| format!("cannot write temp css file: {e}"))?;
-            css_tmp = Some(tmp.clone());
+            let p = write_temp(&format!("<style>{style}</style>"), "html")?;
+            tmp_files.push(p.clone());
             args.push("--standalone".into());
-            args.push(format!("--include-in-header={}", tmp.display()));
+            args.push(format!("--include-in-header={}", p.display()));
         }
     }
 
@@ -188,7 +228,7 @@ pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<
         .wait_with_output()
         .map_err(|e| format!("pandoc failed: {e}"))?;
 
-    if let Some(tmp) = css_tmp {
+    for tmp in tmp_files {
         let _ = std::fs::remove_file(tmp);
     }
 
