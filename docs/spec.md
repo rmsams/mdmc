@@ -64,6 +64,36 @@ lua-filters = ["email"]
 read neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
 scheme is deferred until a second backend lands.
 
+## Pandoc defaults — agreed design, not yet implemented
+
+HTML email depends on a trio of pandoc assets: a template (`email.html`), a Lua
+filter (`email.lua`, Outlook-safe image widths), and a CSS theme (`email.css`,
+the 600px column). These are generic, so mdmc ships them embedded in the binary
+as *hidden fallback defaults*: they apply only when neither the draft's
+frontmatter nor `[defaults]` specifies an asset. They have no user-visible name.
+
+Resolution: a value containing `/` is a path (used literally); otherwise it is a
+name resolved under `paths.pandoc_data` with a per-type convention:
+
+| field | name | resolves to |
+| --- | --- | --- |
+| `lua-filter: email` | `email` | `pandoc_data/filters/email.lua` |
+| `template: email.html` | `email.html` | `pandoc_data/templates/email.html` |
+| `css: email` | `email` | `pandoc_data/css/themes/email.css` |
+
+(`template` takes the full filename, no extension appended.) `css` also accepts
+`http(s)://` URLs. Writing `css: email` resolves to the path, never the embedded
+asset.
+
+`pandoc-raw: true` (frontmatter, optional boolean) suppresses the trio entirely —
+vanilla pandoc with no template/filter/css.
+
+Implementation: embedded assets are materialized to temp files before invoking
+pandoc (its `--template`/`--lua-filter`/`--include-in-header` flags take file
+paths). Once shipped, the `~/.local/share/pandoc/email.*` files and the
+corresponding `[defaults]` entries become redundant and are removed at
+integration time.
+
 ## Schema
 
 The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
@@ -158,6 +188,7 @@ Add optional `sign`/`encrypt` `boolean` properties to `mail-draft.schema.json`.
 ## Deferred
 
 - OpenPGP sign/encrypt (agreed design above, not yet implemented).
+- Embedded pandoc defaults + `pandoc-raw` (agreed design above, not yet implemented).
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
 - Account signature support (neomutt `signature`; currently always empty).
