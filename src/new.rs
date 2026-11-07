@@ -135,6 +135,10 @@ pub fn new(
     if let Some(lua_filter) = &lua_filter {
         fields.push(("lua-filter".to_string(), Field::Str(lua_filter.clone())));
     }
+    fields.push((
+        "message-id".to_string(),
+        Field::Str(crate::util::gen_message_id()),
+    ));
 
     if let Err(errors) = frontmatter::validate(&frontmatter::to_json(&fields)) {
         return Err(errors.join("\n"));

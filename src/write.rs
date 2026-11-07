@@ -5,18 +5,7 @@ use crate::config::{self, Config};
 use crate::frontmatter;
 use crate::mml;
 use crate::quote;
-
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .map(|s| s.trim().to_string())
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "localhost".to_string())
-}
-
-fn gen_message_id() -> String {
-    format!("{}@{}", uuid::Uuid::new_v4(), hostname())
-}
+use crate::util;
 
 fn list_draft_stems(drafts_dir: &Path) -> Vec<String> {
     let mut stems = Vec::new();
@@ -74,13 +63,59 @@ fn inject_content_ids(message: &str, cids: &[String]) -> String {
     out.join("\n")
 }
 
-/// Write a message to a maildir's `tmp/` then atomically move it to `new/`.
-fn maildir_deliver(dst: &Path, message: &str) -> Result<PathBuf, String> {
+/// Read a file's `Message-ID` header value (angle brackets stripped), reading
+/// only the header block prefix.
+fn read_message_id(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut buf = [0u8; 65536];
+    let n = file.read(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf[..n]);
+    for line in text.lines() {
+        if line.is_empty() {
+            return None;
+        }
+        if let Some((name, val)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("message-id") {
+                return Some(
+                    val.trim()
+                        .trim_start_matches('<')
+                        .trim_end_matches('>')
+                        .to_string(),
+                );
+            }
+        }
+    }
+    None
+}
+
+/// Find a message with the given Message-ID in a maildir's `new/` and `cur/`.
+fn find_message_in_maildir(dst: &Path, message_id: &str) -> Option<PathBuf> {
+    for sub in ["new", "cur"] {
+        let dir = dst.join(sub);
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && read_message_id(&path).as_deref() == Some(message_id) {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Write a message to a maildir's `tmp/` then atomically move it to `new/`,
+/// replacing any existing message with the same Message-ID.
+fn maildir_deliver(dst: &Path, message: &str, message_id: &str) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dst).map_err(|e| format!("cannot create {dst:?}: {e}"))?;
     let tmp = dst.join("tmp");
     let new = dst.join("new");
     std::fs::create_dir_all(&tmp).map_err(|e| format!("cannot create {tmp:?}: {e}"))?;
     std::fs::create_dir_all(&new).map_err(|e| format!("cannot create {new:?}: {e}"))?;
+
+    // Locate any prior copy before writing, so a re-write replaces it.
+    let existing = find_message_in_maildir(dst, message_id);
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -91,13 +126,18 @@ fn maildir_deliver(dst: &Path, message: &str) -> Result<PathBuf, String> {
         now,
         std::process::id(),
         &uuid::Uuid::new_v4().simple().to_string()[..8],
-        hostname()
+        util::hostname()
     );
     let tmpf = tmp.join(&uniq);
     std::fs::write(&tmpf, message).map_err(|e| format!("cannot write {tmpf:?}: {e}"))?;
     let final_path = new.join(&uniq);
     std::fs::rename(&tmpf, &final_path)
         .map_err(|e| format!("cannot move {tmpf:?} to {final_path:?}: {e}"))?;
+
+    // Remove the superseded copy (best-effort: the new one is already in place).
+    if let Some(existing) = existing {
+        let _ = std::fs::remove_file(existing);
+    }
     Ok(final_path)
 }
 
@@ -207,7 +247,9 @@ pub fn write(
         return Err(format!("{} has no valid frontmatter.", arg.display()));
     };
 
-    let message_id = gen_message_id();
+    // Reuse the message-id assigned at `new` time; generate a fallback only
+    // for drafts created without one (e.g. before message-id-at-new landed).
+    let message_id = fm.message_id.clone().unwrap_or_else(util::gen_message_id);
 
     let account_name = fm.account.clone();
     let to = fm.to.0.clone();
@@ -281,7 +323,7 @@ pub fn write(
         config::expand_home(drafts)
     };
 
-    let dest = maildir_deliver(&target, &message)?;
+    let dest = maildir_deliver(&target, &message, &message_id)?;
 
     if folder.is_some() {
         println!("Delivered to {}", dest.display());

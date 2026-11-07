@@ -37,6 +37,8 @@ pub struct Draft {
     #[serde(rename = "bcc", default)]
     pub bcc: StringList,
     pub subject: Option<String>,
+    #[serde(rename = "message-id", default)]
+    pub message_id: Option<String>,
     #[serde(rename = "in-reply-to", default)]
     pub in_reply_to: Option<String>,
     #[serde(default)]

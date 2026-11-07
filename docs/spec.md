@@ -6,9 +6,19 @@ tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 ## Commands
 
 `mdmc new` creates a draft note (frontmatter + markdown body) under
-`paths.drafts`, validates its frontmatter against the shipped schema, and
-optionally opens `$EDITOR`. `mdmc write` compiles a draft to RFC 5322 and
-delivers it. Neither ever sends.
+`paths.drafts`, assigns its `message-id`, validates its frontmatter against the
+shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
+RFC 5322 and delivers it. Neither ever sends.
+
+## Message-id semantics
+
+A draft's Message-ID is a random UUID v4 plus the local hostname, assigned once
+at `new` time and persisted in the note's frontmatter. `write` reuses the
+persisted id (falling back to generating one only for drafts that lack it), so
+every delivery mode — `--stdout`, `--folder`, and the drafts maildir — emits the
+same Message-ID. Maildir delivery overwrites any existing message carrying the
+same Message-ID (scanning `new/` and `cur/` headers), so re-running `write` is
+idempotent and never leaves stale duplicate drafts.
 
 ## Compile pipeline
 
@@ -17,16 +27,16 @@ delivers it. Neither ever sends.
 1. Load `config.toml` (paths, folders, accounts, defaults).
 2. Load the draft note's `---` frontmatter (YAML) + body.
 3. Resolve the account's `from`/`realname` from `[accounts.<name>]`.
-4. Optionally append a reply quote (`notmuch show` → `id:` lookup).
-5. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
+4. Reuse the note's `message-id` (or generate one for legacy drafts).
+5. Optionally append a reply quote (`notmuch show` → `id:` lookup).
+6. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
    with `![[…]]` image embeds becoming inline `cid:` parts.
-6. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
+7. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
    crate (`compiler` feature only, no `cli`).
-7. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
+8. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
    restore CRLF.
-8. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
-   the account's `drafts` maildir (then write `message-id`/`status: pending` back
-   to the note).
+9. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
+   the account's `drafts` maildir (then write `status: pending` back to the note).
 
 ## Config schema
 
@@ -70,6 +80,7 @@ location is controlled by `paths.drafts` in config.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `quote.rs` — notmuch reply quoting.
+- `util.rs` — hostname and Message-ID generation.
 - `write.rs` — the `write` subcommand (compile + maildir delivery).
 
 ## MML crate

@@ -3,6 +3,7 @@ mod frontmatter;
 mod mml;
 mod new;
 mod quote;
+mod util;
 mod write;
 
 use std::path::PathBuf;
