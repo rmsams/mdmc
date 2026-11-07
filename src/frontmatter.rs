@@ -1,6 +1,8 @@
 use regex::Regex;
 use serde::Deserialize;
 
+static MAIL_DRAFT_SCHEMA: &str = include_str!("../schema/mail-draft.schema.json");
+
 /// A YAML field that may be a single string or a list of strings.
 #[derive(Debug, Clone, Default)]
 pub struct StringList(pub Vec<String>);
@@ -133,4 +135,88 @@ fn closing_line_index(text: &str) -> Option<usize> {
         }
     }
     None
+}
+
+/// A single frontmatter field value: a scalar or a list of scalars.
+pub enum Field {
+    Str(String),
+    List(Vec<String>),
+}
+
+/// Validate a frontmatter instance against the embedded `mail-draft` schema.
+pub fn validate(fm: &serde_json::Value) -> Result<(), Vec<String>> {
+    let schema: serde_json::Value =
+        serde_json::from_str(MAIL_DRAFT_SCHEMA).expect("embedded mail-draft schema is valid JSON");
+    let validator = jsonschema::validator_for(&schema).map_err(|e| vec![e.to_string()])?;
+    let errors: Vec<String> = validator.iter_errors(fm).map(|e| e.to_string()).collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Render an ordered field list to a `serde_json::Value` for schema validation.
+pub fn to_json(fields: &[(String, Field)]) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    for (key, value) in fields {
+        let v = match value {
+            Field::Str(s) => serde_json::Value::String(s.clone()),
+            Field::List(items) => serde_json::Value::Array(
+                items
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        };
+        map.insert(key.clone(), v);
+    }
+    serde_json::Value::Object(map)
+}
+
+/// Render a complete note: `---`-delimited frontmatter, a blank line, and the
+/// (already right-trimmed) body. Field order is preserved.
+pub fn render_note(fields: &[(String, Field)], body_text: &str) -> String {
+    let mut yaml = String::new();
+    for (key, value) in fields {
+        match value {
+            Field::Str(s) => {
+                yaml.push_str(&format!("{key}: {}\n", scalar(s)));
+            }
+            Field::List(items) => {
+                yaml.push_str(&format!("{key}:\n"));
+                for item in items {
+                    yaml.push_str(&format!("  - {}\n", scalar(item)));
+                }
+            }
+        }
+    }
+    format!("---\n{yaml}---\n\n{body_text}\n")
+}
+
+/// Quote a scalar only when it would be misread as a plain YAML scalar.
+fn scalar(s: &str) -> String {
+    if needs_quotes(s) {
+        format!("'{}'", s.replace('\'', "''"))
+    } else {
+        s.to_string()
+    }
+}
+
+fn needs_quotes(s: &str) -> bool {
+    if s.is_empty() || s != s.trim() || s.contains('\n') {
+        return true;
+    }
+    if let Some(c) = s.chars().next() {
+        if "-?:,[]{}#&*!|>'\"%@` ".contains(c) {
+            return true;
+        }
+    }
+    s.contains(": ")
+        || s.contains(" #")
+        || s.ends_with(':')
+        || matches!(
+            s.to_ascii_lowercase().as_str(),
+            "null" | "~" | "true" | "false" | "yes" | "no" | "on" | "off"
+        )
 }

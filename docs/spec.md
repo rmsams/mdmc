@@ -3,6 +3,13 @@
 `mdmc` (markdown mail compiler) is a Rust reimplementation of the Python `mail`
 tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 
+## Commands
+
+`mdmc new` creates a draft note (frontmatter + markdown body) under
+`paths.drafts`, validates its frontmatter against the shipped schema, and
+optionally opens `$EDITOR`. `mdmc write` compiles a draft to RFC 5322 and
+delivers it. Neither ever sends.
+
 ## Compile pipeline
 
 `write <draft>`:
@@ -47,10 +54,20 @@ lua-filters = ["email"]
 read neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
 scheme is deferred until a second backend lands.
 
+## Schema
+
+The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
+`schema/mail-draft.schema.json` and embedded in the binary via `include_str!`.
+`new` validates the frontmatter it builds against it (using the `jsonschema`
+crate) before writing. There is no dependency on `~/kb` or the external
+`kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
+location is controlled by `paths.drafts` in config.
+
 ## Module map
 
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
-- `frontmatter.rs` — `---`-delimited YAML → `Draft`; `set_fields` in-place scalar rewrite.
+- `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
+- `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `quote.rs` — notmuch reply quoting.
 - `write.rs` — the `write` subcommand (compile + maildir delivery).
@@ -69,9 +86,9 @@ angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 
 ## Deferred
 
-- The `new` subcommand (draft note creation).
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
+- Account signature support (neomutt `signature`; currently always empty).
 
 ## Open questions (from `~/kb/ops/notes/mail-generalization-rust-rewrite.md`)
 

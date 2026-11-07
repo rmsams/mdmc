@@ -57,6 +57,7 @@ pub struct Paths {
 
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct Defaults {
+    pub account: Option<String>,
     pub css: Option<String>,
     pub template: Option<String>,
     #[serde(
@@ -124,6 +125,10 @@ impl Config {
                 .as_deref()
                 .unwrap_or("~/.local/share/pandoc"),
         )
+    }
+
+    pub fn default_account(&self) -> Option<&str> {
+        self.defaults.account.as_deref()
     }
 
     pub fn default_css(&self) -> Option<&str> {
