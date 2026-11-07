@@ -86,6 +86,9 @@
     "pandoc-raw": {
       "type": "boolean"
     },
+    "sign": {
+      "type": "boolean"
+    },
     "tags": {
       "type": [
         "array",

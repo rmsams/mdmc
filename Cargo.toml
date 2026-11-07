@@ -19,6 +19,7 @@ uuid = { version = "1", features = ["v4"] }
 libc = "0.2"
 jsonschema = { version = "0.60.2", default-features = false }
 mime-meta-language = { version = "1.1", default-features = false, features = ["compiler"] }
+mail-builder = "0.4"
 
 [profile.release]
 lto = true

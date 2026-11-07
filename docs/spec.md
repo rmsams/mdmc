@@ -127,12 +127,12 @@ mml::compiler::message::MmlCompilerBuilder::new().build(&source)?.compile()?.int
 body). The compiler adds `MIME-Version: 1.0` and a `Date` header, and re-adds
 angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 
-## Crypto (OpenPGP) — agreed design, not yet implemented
+## Crypto (OpenPGP)
 
 Signing/encryption is a compile-time MIME transformation (RFC 3156 PGP/MIME),
 not an RFC 5322 header concern and not a send-time concern. PGP/MIME only — no
 inline-PGP. It applies to the message body, so the RFC 5322 headers are
-untouched.
+untouched. Signing is implemented; encryption is deferred.
 
 ### Intent — frontmatter
 
@@ -176,19 +176,20 @@ The `mime-meta-language` compiler has no PGP support (no `sign`/`encrypt`
 grammar, no pgp features), and `mail-builder` has no crypto helpers. The seam is
 `MmlCompileResult::into_msg_builder()`, which yields the `mail_builder`
 `MessageBuilder` before serialization; `MessageBuilder.body` is a public field.
-Flow: compile MML → `MessageBuilder` → serialize the body part (`write_part`) →
-`gpg` sign/encrypt those bytes → replace `.body` with a
-`multipart/signed`/`multipart/encrypted` `MimePart` (via `ContentType::attribute`
-for `protocol`/`micalg`) → serialize. Requires RFC 3156 CRLF canonicalization of
-the signed bytes.
+`compile_mml` keeps the builder in scope for the whole pipeline: inject inline
+`Content-ID`s (builder level, before signing), optionally sign by serializing the
+body part (`write_part`, CRLF) → `gpg --detach-sign --armor --digest-algo sha512`
+→ wrap in a `multipart/signed` `MimePart` with `protocol`/`micalg` attributes →
+serialize. `mail-builder` emits CRLF consistently, so the signed bytes verify.
 
 ### Schema
 
-Add optional `sign`/`encrypt` `boolean` properties to `mail-draft.schema.json`.
+Added an optional `sign` `boolean` to `mail-draft.schema.json`. `encrypt` is
+added with encryption support.
 
 ## Deferred
 
-- OpenPGP sign/encrypt (agreed design above, not yet implemented).
+- OpenPGP encryption (signing is implemented): `encrypt: true` → `multipart/encrypted`, plus sign-then-encrypt.
 - The `msmtp-sent` equivalent (IMAP-append to Sent).
 - Non-maildir delivery backends (URI scheme).
 - Account signature support (neomutt `signature`; currently always empty).

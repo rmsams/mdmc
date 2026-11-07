@@ -62,6 +62,7 @@ pub fn new(
     template: Option<String>,
     lua_filter: Option<String>,
     pandoc_raw: bool,
+    sign: bool,
     editor: bool,
 ) -> Result<(), String> {
     if let Some(fmt) = &format {
@@ -138,6 +139,9 @@ pub fn new(
     }
     if pandoc_raw {
         fields.push(("pandoc-raw".to_string(), Field::Bool(true)));
+    }
+    if sign {
+        fields.push(("sign".to_string(), Field::Bool(true)));
     }
     fields.push((
         "message-id".to_string(),

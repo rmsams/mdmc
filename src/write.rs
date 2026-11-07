@@ -47,22 +47,6 @@ fn inject_headers(message: &str, headers: &[String]) -> String {
     out_lines.join("\n")
 }
 
-fn inject_content_ids(message: &str, cids: &[String]) -> String {
-    if cids.is_empty() {
-        return message.to_string();
-    }
-    let mut out: Vec<String> = Vec::new();
-    let mut idx = 0;
-    for line in message.split('\n') {
-        out.push(line.to_string());
-        if line.trim().starts_with("Content-Disposition: inline") && idx < cids.len() {
-            out.push(format!("Content-ID: <{}>", cids[idx]));
-            idx += 1;
-        }
-    }
-    out.join("\n")
-}
-
 /// Read a file's `Message-ID` header value (angle brackets stripped), reading
 /// only the header block prefix.
 fn read_message_id(path: &Path) -> Option<String> {
@@ -148,6 +132,7 @@ fn compile_message(
     from_hdr: &str,
     message_id: &str,
     attachments_dir: &Path,
+    signing_key: Option<&str>,
 ) -> Result<String, String> {
     let to = &fm.to.0;
     let cc = &fm.cc.0;
@@ -185,7 +170,13 @@ fn compile_message(
         mml::build_mml_body(fm, body_text, cfg, &attachment_paths, attachments_dir)?;
     let mml_source = format!("{}\n\n{mml_body}\n", headers.join("\n"));
 
-    let compiled = mml::compile_mml(&mml_source)?;
+    let sign_key = if fm.sign.unwrap_or(false) {
+        Some(signing_key.ok_or("cannot sign: account has no signing_key configured.")?)
+    } else {
+        None
+    };
+    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key)?;
+
     let mut message = String::from_utf8_lossy(&compiled).into_owned();
     message = message.replace("\r\n", "\n");
 
@@ -197,9 +188,6 @@ fn compile_message(
                 format!("References: <{in_reply_to}>"),
             ],
         );
-    }
-    if !inline_cids.is_empty() {
-        message = inject_content_ids(&message, &inline_cids);
     }
 
     Ok(message.replace('\n', "\r\n"))
@@ -278,6 +266,7 @@ pub fn write(
 
     let acct = cfg.resolve_account(account_name.as_deref().unwrap())?;
     let from_hdr = acct.sender();
+    let signing_key = acct.signing_key.as_deref();
 
     let in_reply_to = fm.in_reply_to.as_deref().unwrap_or("").trim().to_string();
     let quote = fm.quote.as_deref().unwrap_or("auto").trim();
@@ -296,6 +285,7 @@ pub fn write(
         &from_hdr,
         &message_id,
         &attachments_dir,
+        signing_key,
     )?;
 
     if stdout {

@@ -566,6 +566,7 @@ dependencies = [
  "clap",
  "jsonschema",
  "libc",
+ "mail-builder",
  "mime-meta-language",
  "regex",
  "serde",

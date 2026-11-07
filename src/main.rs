@@ -69,6 +69,9 @@ enum Command {
         /// Use vanilla pandoc (no template/filter/css)
         #[arg(long = "pandoc-raw")]
         pandoc_raw: bool,
+        /// Sign the message with the account's signing key
+        #[arg(long)]
+        sign: bool,
         /// Open $EDITOR on the note after writing
         #[arg(long)]
         editor: bool,
@@ -112,6 +115,7 @@ fn main() {
             template,
             lua_filter,
             pandoc_raw,
+            sign,
             editor,
         } => new::new(
             &config_path,
@@ -128,6 +132,7 @@ fn main() {
             template,
             lua_filter,
             pandoc_raw,
+            sign,
             editor,
         ),
         Command::Write {

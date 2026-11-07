@@ -6,6 +6,11 @@ use std::sync::OnceLock;
 use regex::Regex;
 use uuid::Uuid;
 
+use mail_builder::{
+    headers::{content_type::ContentType, message_id::MessageId, HeaderType},
+    mime::{BodyPart, MimePart},
+    MessageBuilder,
+};
 use mml::compiler::message::MmlCompilerBuilder;
 
 use crate::config::Config;
@@ -338,14 +343,118 @@ pub fn build_mml_body(
     Ok((inner, inline.into_iter().map(|(cid, _)| cid).collect()))
 }
 
-/// Compile a full MML message (headers + blank line + MML body) to MIME bytes.
-pub fn compile_mml(mml_source: &str) -> Result<Vec<u8>, String> {
+/// Compile a full MML message (headers + blank line + MML body) to MIME bytes,
+/// injecting inline `Content-ID`s and optionally signing the body. The builder
+/// is kept in scope for the whole pipeline because the compiled `MessageBuilder`
+/// borrows the MML source.
+pub fn compile_mml(
+    mml_source: &str,
+    inline_cids: &[String],
+    signing_key: Option<&str>,
+) -> Result<Vec<u8>, String> {
     let compiler = MmlCompilerBuilder::new()
         .build(mml_source)
         .map_err(|e| format!("mml compile failed: {e}"))?;
-    compiler
+    let result = compiler
         .compile()
-        .map_err(|e| format!("mml compile failed: {e}"))?
-        .into_vec()
-        .map_err(|e| format!("mml compile failed: {e}"))
+        .map_err(|e| format!("mml compile failed: {e}"))?;
+    let mut builder = result.into_msg_builder();
+
+    inject_content_ids(&mut builder, inline_cids);
+    if let Some(key) = signing_key {
+        sign_body(&mut builder, key)?;
+    }
+
+    builder
+        .write_to_vec()
+        .map_err(|e| format!("cannot serialize message: {e}"))
+}
+
+/// Assign `Content-ID`s to inline parts in source order. The mml compiler emits
+/// `Content-Disposition: inline` for inline image parts but no `Content-ID`, so
+/// the `cid:` references in the html body cannot resolve without this.
+fn inject_content_ids(builder: &mut MessageBuilder, cids: &[String]) {
+    if cids.is_empty() {
+        return;
+    }
+    if let Some(body) = builder.body.as_mut() {
+        let mut idx = 0;
+        inject_cids_rec(body, cids, &mut idx);
+    }
+}
+
+fn inject_cids_rec(part: &mut MimePart, cids: &[String], idx: &mut usize) {
+    let is_inline = part.headers.iter().any(|(name, value)| {
+        name == "Content-Disposition"
+            && matches!(value, HeaderType::ContentType(ct) if ct.c_type == "inline")
+    });
+    if is_inline && *idx < cids.len() {
+        part.headers.push((
+            "Content-ID".into(),
+            MessageId::new(cids[*idx].clone()).into(),
+        ));
+        *idx += 1;
+    }
+    if let BodyPart::Multipart(parts) = &mut part.contents {
+        for p in parts {
+            inject_cids_rec(p, cids, idx);
+        }
+    }
+}
+
+/// Sign the message body with OpenPGP, wrapping it in `multipart/signed`
+/// (RFC 3156). Returns an error if the body is missing or gpg fails.
+fn sign_body(builder: &mut MessageBuilder, signing_key: &str) -> Result<(), String> {
+    let body = builder.body.take().ok_or("no body to sign")?;
+
+    let mut body_bytes = Vec::new();
+    body.clone()
+        .write_part(&mut body_bytes)
+        .map_err(|e| format!("cannot serialize body: {e}"))?;
+
+    let signature = gpg_detach_sign(&body_bytes, signing_key)?;
+
+    let sig_part = MimePart::new(
+        "application/pgp-signature",
+        BodyPart::Text(signature.into()),
+    );
+    let ctype = ContentType::new("multipart/signed")
+        .attribute("protocol", "application/pgp-signature")
+        .attribute("micalg", "pgp-sha512");
+    let signed = MimePart::new(ctype, BodyPart::Multipart(vec![body, sig_part]));
+    builder.body = Some(signed);
+    Ok(())
+}
+
+fn gpg_detach_sign(body: &[u8], signing_key: &str) -> Result<String, String> {
+    let mut child = Command::new("gpg")
+        .args([
+            "--detach-sign",
+            "--armor",
+            "--digest-algo",
+            "sha512",
+            "--local-user",
+            signing_key,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("gpg failed to start: {e}"))?;
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(body)
+        .map_err(|e| format!("gpg stdin write failed: {e}"))?;
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("gpg failed: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "gpg --detach-sign failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }

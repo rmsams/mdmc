@@ -54,6 +54,8 @@ pub struct Draft {
     #[serde(rename = "pandoc-raw", default)]
     pub pandoc_raw: Option<bool>,
     #[serde(default)]
+    pub sign: Option<bool>,
+    #[serde(default)]
     pub attachments: Vec<String>,
 }
 
