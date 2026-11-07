@@ -61,32 +61,42 @@ impl Draft {
     }
 }
 
-/// Parse `---`-delimited YAML frontmatter.
-///
-/// Returns `(None, text)` when the text has no valid `---` frontmatter.
-/// A present-but-unparseable frontmatter yields a default (empty) `Draft`
-/// with the body, matching the Python tool's behaviour of failing later on
-/// the missing required fields.
-pub fn load(text: &str) -> (Option<Draft>, &str) {
+/// Extract the `---`-delimited YAML frontmatter text and the body that follows
+/// it. Returns `None` when the text has no `---` frontmatter.
+fn extract(text: &str) -> Option<(&str, &str)> {
     if !text.starts_with("---") {
-        return (None, text);
+        return None;
     }
     let rest = &text[3..];
     match rest.chars().next() {
-        Some(c) if c != '\n' && c != '\r' => return (None, text),
-        None => return (None, text),
+        Some(c) if c != '\n' && c != '\r' => return None,
+        None => return None,
         _ => {}
     }
 
     let re = Regex::new(r"(?m)^---[ \t]*$").expect("static regex");
-    let Some(m) = re.find(rest) else {
-        return (None, text);
-    };
+    let m = re.find(rest)?;
 
     let yaml_text = rest[..m.start()].trim_end_matches(['\n', '\r']);
     let body = &rest[m.end()..];
+    Some((yaml_text, body))
+}
+
+/// Parse `---`-delimited YAML frontmatter.
+///
+/// Returns `(None, None, text)` when the text has no valid `---` frontmatter.
+/// On success the first element is the typed `Draft`, and the second is the
+/// full frontmatter as a JSON value (for schema validation; `None` if the YAML
+/// failed to parse). A present-but-unparseable frontmatter yields a default
+/// (empty) `Draft`, matching the Python tool's behaviour of failing later on
+/// the missing required fields.
+pub fn load(text: &str) -> (Option<Draft>, Option<serde_json::Value>, &str) {
+    let Some((yaml_text, body)) = extract(text) else {
+        return (None, None, text);
+    };
     let draft = serde_yaml::from_str::<Draft>(yaml_text).unwrap_or_default();
-    (Some(draft), body)
+    let json = serde_yaml::from_str::<serde_json::Value>(yaml_text).ok();
+    (Some(draft), json, body)
 }
 
 /// Rewrite scalar frontmatter fields in place, preserving all other content

@@ -69,7 +69,8 @@ scheme is deferred until a second backend lands.
 The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
 `schema/mail-draft.schema.json` and embedded in the binary via `include_str!`.
 `new` validates the frontmatter it builds against it (using the `jsonschema`
-crate) before writing. There is no dependency on `~/kb` or the external
+crate) before writing, and `write` validates the frontmatter of the note it
+loads before compiling. There is no dependency on `~/kb` or the external
 `kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
 location is controlled by `paths.drafts` in config.
 

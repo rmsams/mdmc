@@ -243,9 +243,14 @@ pub fn write(
     }
 
     let text = std::fs::read_to_string(&arg).map_err(|e| format!("cannot read draft: {e}"))?;
-    let (Some(fm), body) = frontmatter::load(&text) else {
+    let (Some(fm), fm_json, body) = frontmatter::load(&text) else {
         return Err(format!("{} has no valid frontmatter.", arg.display()));
     };
+    if let Some(fm_json) = fm_json {
+        if let Err(errors) = frontmatter::validate(&fm_json) {
+            return Err(format!("invalid frontmatter:\n{}", errors.join("\n")));
+        }
+    }
 
     // Reuse the message-id assigned at `new` time; generate a fallback only
     // for drafts created without one (e.g. before message-id-at-new landed).
