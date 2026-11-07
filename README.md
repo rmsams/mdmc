@@ -59,8 +59,15 @@ Compile it and deliver it to the account's drafts maildir:
 mdmc write hello
 ```
 
-Neither command sends. Run `mdmc new --help` or `mdmc write --help` for the
-full option list.
+Neither command sends. Sending is left to the tool that owns the delivery
+maildir, or to an SMTP client that reads RFC 5322 from standard input. For
+example, pipe the compiled message straight into msmtp:
+
+```sh
+mdmc write hello --stdout | msmtp --read-envelope-from --read-recipients
+```
+
+Run `mdmc new --help` or `mdmc write --help` for the full option list.
 
 ## Configuration
 
