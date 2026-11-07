@@ -179,3 +179,28 @@ pub fn new(
     println!("draft: {}", path.display());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_lowercases_and_hyphenates() {
+        assert_eq!(slugify("Re: CFSS-13158383"), "re-cfss-13158383");
+        assert_eq!(slugify("Hello World!"), "hello-world");
+        assert_eq!(slugify("  spaces  "), "spaces");
+    }
+
+    #[test]
+    fn slugify_falls_back_to_draft() {
+        assert_eq!(slugify(""), "draft");
+        assert_eq!(slugify("---"), "draft");
+    }
+
+    #[test]
+    fn split_addresses_handles_commas_and_whitespace() {
+        assert_eq!(split_addresses("a@b.c, c@d.e"), vec!["a@b.c", "c@d.e"]);
+        assert_eq!(split_addresses("  a@b.c  "), vec!["a@b.c"]);
+        assert_eq!(split_addresses(""), Vec::<String>::new());
+    }
+}

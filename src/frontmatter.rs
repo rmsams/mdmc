@@ -243,3 +243,102 @@ fn needs_quotes(s: &str) -> bool {
             "null" | "~" | "true" | "false" | "yes" | "no" | "on" | "off"
         )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_parses_frontmatter_and_body() {
+        let text = "---\ntitle: 'Re: Test'\ntype: mail-draft\nstatus: draft\naccount: rmsams-gmail\nformat: text\nsubject: 'Re: Test'\nto:\n  - a@b.c\n---\n\nBody text\n";
+        let (draft, json, body) = load(text);
+        let draft = draft.unwrap();
+        assert_eq!(draft.account.as_deref(), Some("rmsams-gmail"));
+        assert_eq!(draft.to.0, vec!["a@b.c"]);
+        assert_eq!(draft.subject.as_deref(), Some("Re: Test"));
+        assert_eq!(draft.format(), "text");
+        assert!(json.is_some());
+        assert_eq!(body, "\n\nBody text\n");
+    }
+
+    #[test]
+    fn load_returns_none_without_frontmatter() {
+        let text = "just a body, no frontmatter";
+        let (draft, json, body) = load(text);
+        assert!(draft.is_none());
+        assert!(json.is_none());
+        assert_eq!(body, text);
+    }
+
+    #[test]
+    fn load_tolerates_malformed_yaml() {
+        let text = "---\n: : : not valid\n---\nbody\n";
+        let (draft, json, _) = load(text);
+        assert!(draft.is_some());
+        assert!(json.is_none());
+    }
+
+    #[test]
+    fn load_string_list_accepts_scalar() {
+        let text = "---\ntype: mail-draft\nto: a@b.c\n---\n\n";
+        let (draft, _, _) = load(text);
+        assert_eq!(draft.unwrap().to.0, vec!["a@b.c"]);
+    }
+
+    #[test]
+    fn set_fields_replaces_in_place() {
+        let text = "---\ntitle: T\nstatus: draft\nmessage-id: old@x\n---\n\nbody\n";
+        let out = set_fields(text, &[("status", "pending"), ("message-id", "new@x")]);
+        assert!(out.contains("status: pending\n"));
+        assert!(out.contains("message-id: new@x\n"));
+        assert!(!out.contains("old@x"));
+        assert!(out.contains("title: T\n"));
+        assert!(out.ends_with("body\n"));
+    }
+
+    #[test]
+    fn set_fields_appends_missing_key_before_closing_delimiter() {
+        let text = "---\ntitle: T\nstatus: draft\n---\n\nbody\n";
+        let out = set_fields(text, &[("message-id", "new@x")]);
+        assert!(out.contains("message-id: new@x\n"));
+        assert!(out.contains("title: T\n"));
+        assert!(out.contains("status: draft\n"));
+        assert!(out.ends_with("body\n"));
+    }
+
+    #[test]
+    fn render_note_quotes_and_formats() {
+        let fields = vec![
+            (
+                "title".to_string(),
+                Field::Str("Re: CFSS-13158383".to_string()),
+            ),
+            ("type".to_string(), Field::Str("mail-draft".to_string())),
+            ("to".to_string(), Field::List(vec!["a@b.c".to_string()])),
+            ("sign".to_string(), Field::Bool(true)),
+        ];
+        let note = render_note(&fields, "hello");
+        assert!(note.contains("title: 'Re: CFSS-13158383'\n"));
+        assert!(note.contains("to:\n  - a@b.c\n"));
+        assert!(note.contains("sign: true\n"));
+        assert_eq!(note, "---\ntitle: 'Re: CFSS-13158383'\ntype: mail-draft\nto:\n  - a@b.c\nsign: true\n---\n\nhello\n");
+    }
+
+    #[test]
+    fn validate_rejects_bad_type() {
+        let json = serde_json::json!({"title": "T", "type": "not-mail-draft"});
+        assert!(validate(&json).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_minimal_valid() {
+        let json = serde_json::json!({"title": "T", "type": "mail-draft"});
+        assert!(validate(&json).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_bad_format() {
+        let json = serde_json::json!({"title": "T", "type": "mail-draft", "format": "bogus"});
+        assert!(validate(&json).is_err());
+    }
+}

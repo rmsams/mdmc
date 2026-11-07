@@ -540,3 +540,23 @@ fn gpg_encrypt(
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_mml_escapes_directives() {
+        assert_eq!(escape_mml("hello <#part foo"), "hello <#!part foo");
+        assert_eq!(
+            escape_mml("<#multipart type=alt>"),
+            "<#!multipart type=alt>"
+        );
+    }
+
+    #[test]
+    fn escape_mml_leaves_escaped_and_plain_text() {
+        assert_eq!(escape_mml("already <#!part"), "already <#!part");
+        assert_eq!(escape_mml("no directives"), "no directives");
+    }
+}

@@ -18,7 +18,7 @@ devenv shell
 
 - `mdmc <args>` — run the CLI via `cargo run`
 - `build` — `cargo build --release`
-- `test` — `cargo test`
+- `tests` — `cargo test`
 
 Direct checks (run inside the devenv shell):
 

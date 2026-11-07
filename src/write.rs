@@ -363,3 +363,66 @@ pub fn write(
     println!("Open neomutt Drafts to review and send (press S).");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_email_handles_variants() {
+        assert_eq!(
+            extract_email("Abdul Azim <Abdul.Azim@x.com>"),
+            "Abdul.Azim@x.com"
+        );
+        assert_eq!(extract_email("a@b.c"), "a@b.c");
+        assert_eq!(extract_email("<a@b.c>"), "a@b.c");
+    }
+
+    #[test]
+    fn recipient_emails_extracts_all_fields() {
+        let to = vec!["a@b.c".to_string()];
+        let cc = vec!["Name <c@d.e>".to_string()];
+        let bcc = vec!["<f@g.h>".to_string()];
+        assert_eq!(
+            recipient_emails(&to, &cc, &bcc),
+            vec!["a@b.c", "c@d.e", "f@g.h"]
+        );
+    }
+
+    #[test]
+    fn inject_headers_inserts_before_blank_line() {
+        let msg = "From: a@b.c\nTo: c@d.e\nSubject: S\n\nBody\n";
+        let out = inject_headers(msg, &["In-Reply-To: <x@y>".to_string()]);
+        assert!(out.contains("Subject: S\nIn-Reply-To: <x@y>\n\nBody\n"));
+    }
+
+    #[test]
+    fn inject_headers_replaces_existing() {
+        let msg = "From: a@b.c\nIn-Reply-To: <old>\nSubject: S\n\nBody\n";
+        let out = inject_headers(msg, &["In-Reply-To: <new>".to_string()]);
+        assert!(!out.contains("old"));
+        assert!(out.contains("In-Reply-To: <new>"));
+    }
+
+    #[test]
+    fn maildir_deliver_overwrites_duplicate_message_id() {
+        let dir = std::env::temp_dir().join(format!("mdmc-test-{}", uuid::Uuid::new_v4()));
+        maildir_deliver(&dir, "Message-ID: <a@x>\n\nold body\n", "a@x").unwrap();
+        maildir_deliver(&dir, "Message-ID: <a@x>\n\nnew body\n", "a@x").unwrap();
+
+        let files: Vec<_> = std::fs::read_dir(dir.join("new"))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(files.len(), 1, "re-write should leave a single message");
+        let content = std::fs::read_to_string(files[0].path()).unwrap();
+        assert!(content.contains("new body"));
+        assert!(!content.contains("old body"));
+
+        // a distinct message-id is not overwritten
+        maildir_deliver(&dir, "Message-ID: <b@x>\n\nother\n", "b@x").unwrap();
+        assert_eq!(std::fs::read_dir(dir.join("new")).unwrap().count(), 2);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}

@@ -166,3 +166,57 @@ impl Config {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_home_handles_tilde() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(expand_home("~/foo"), PathBuf::from(format!("{home}/foo")));
+        assert_eq!(expand_home("~"), PathBuf::from(&home));
+        assert_eq!(expand_home("/abs/path"), PathBuf::from("/abs/path"));
+    }
+
+    #[test]
+    fn load_parses_accounts_and_defaults() {
+        let toml = r#"
+[accounts.test]
+from = "a@b.c"
+realname = "A B"
+signing_key = "0xABC"
+
+[defaults]
+account = "test"
+lua-filters = ["email"]
+"#;
+        let path = std::env::temp_dir().join(format!("mdmc-cfg-{}.toml", uuid::Uuid::new_v4()));
+        std::fs::write(&path, toml).unwrap();
+        let cfg = Config::load(&path);
+        std::fs::remove_file(&path).ok();
+
+        let acct = cfg.resolve_account("test").unwrap();
+        assert_eq!(acct.from.as_deref(), Some("a@b.c"));
+        assert_eq!(acct.realname.as_deref(), Some("A B"));
+        assert_eq!(acct.signing_key.as_deref(), Some("0xABC"));
+        assert_eq!(acct.sender(), "A B <a@b.c>");
+        assert_eq!(cfg.default_account(), Some("test"));
+        assert_eq!(cfg.default_lua_filters(), &["email".to_string()][..]);
+    }
+
+    #[test]
+    fn resolve_account_missing_errors() {
+        let cfg = Config::default();
+        assert!(cfg.resolve_account("nope").is_err());
+    }
+
+    #[test]
+    fn sender_omits_realname_when_absent() {
+        let acct = Account {
+            from: Some("a@b.c".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(acct.sender(), "a@b.c");
+    }
+}

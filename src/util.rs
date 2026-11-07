@@ -11,3 +11,17 @@ pub fn hostname() -> String {
 pub fn gen_message_id() -> String {
     format!("{}@{}", uuid::Uuid::new_v4(), hostname())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_id_is_uuid_at_hostname() {
+        let id = gen_message_id();
+        let (left, right) = id.split_once('@').unwrap();
+        assert_eq!(left.len(), 36, "uuid v4 is 36 chars");
+        assert!(uuid::Uuid::parse_str(left).is_ok());
+        assert!(!right.is_empty());
+    }
+}

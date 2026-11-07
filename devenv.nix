@@ -13,7 +13,7 @@
 
   scripts.mdmc.exec = "cargo run -- \"$@\"";
   scripts.build.exec = "cargo build --release";
-  scripts.test.exec = "cargo test";
+  scripts.tests.exec = "cargo test";
 
   enterShell = ''
     echo "mdmc — markdown mail compiler"
