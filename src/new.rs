@@ -3,12 +3,53 @@ use std::path::PathBuf;
 use crate::config::Config;
 use crate::frontmatter::{self, Field};
 
+/// Split a comma-separated address list, respecting `"quoted names"` (which
+/// may contain commas) and `<angle-bracketed addresses>`.
 fn split_addresses(value: &str) -> Vec<String> {
-    value
-        .split(',')
-        .map(|a| a.trim().to_string())
-        .filter(|a| !a.is_empty())
-        .collect()
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut in_brackets = false;
+    let mut escaped = false;
+    for c in value.chars() {
+        if escaped {
+            current.push(c);
+            escaped = false;
+            continue;
+        }
+        if c == '\\' && in_quotes {
+            escaped = true;
+            current.push(c);
+            continue;
+        }
+        match c {
+            '"' if !in_brackets => {
+                in_quotes = !in_quotes;
+                current.push(c);
+            }
+            '<' if !in_quotes => {
+                in_brackets = true;
+                current.push(c);
+            }
+            '>' if !in_quotes => {
+                in_brackets = false;
+                current.push(c);
+            }
+            ',' if !in_quotes && !in_brackets => {
+                let part = current.trim();
+                if !part.is_empty() {
+                    parts.push(part.to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+    let part = current.trim();
+    if !part.is_empty() {
+        parts.push(part.to_string());
+    }
+    parts
 }
 
 fn slugify(text: &str) -> String {
@@ -189,5 +230,21 @@ mod tests {
         assert_eq!(split_addresses("a@b.c, c@d.e"), vec!["a@b.c", "c@d.e"]);
         assert_eq!(split_addresses("  a@b.c  "), vec!["a@b.c"]);
         assert_eq!(split_addresses(""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn split_addresses_respects_quoted_names_and_brackets() {
+        assert_eq!(
+            split_addresses("\"Doe, John\" <john@x.com>, a@b.c"),
+            vec!["\"Doe, John\" <john@x.com>", "a@b.c"]
+        );
+        assert_eq!(
+            split_addresses("Joe Blogs <joe@x.com>, c@d.e"),
+            vec!["Joe Blogs <joe@x.com>", "c@d.e"]
+        );
+        assert_eq!(
+            split_addresses("\"He said \\\"hi\\\"\" <x@y.com>"),
+            vec!["\"He said \\\"hi\\\"\" <x@y.com>"]
+        );
     }
 }
