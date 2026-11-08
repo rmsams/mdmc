@@ -9,7 +9,8 @@ tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
-message-id is in the account's sent maildir. None of them ever send.
+message-id is in the account's sent maildir. `mdmc list` prints `status  slug`
+rows with the status colour-coded. None of them ever send.
 
 ## Status lifecycle
 

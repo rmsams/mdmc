@@ -65,6 +65,12 @@ Mark drafts sent once their message-id is in the account's sent maildir:
 mdmc reconcile
 ```
 
+List drafts with their status (colour-coded):
+
+```sh
+mdmc list
+```
+
 None of these commands send. Sending is left to the tool that owns the
 delivery maildir, or to an SMTP client that reads RFC 5322 from standard input.
 For example, pipe the compiled message straight into msmtp:

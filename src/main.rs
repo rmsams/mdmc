@@ -1,5 +1,6 @@
 mod config;
 mod frontmatter;
+mod list;
 mod maildir;
 mod mml;
 mod new;
@@ -94,6 +95,8 @@ enum Command {
     },
     /// Mark drafts sent when their message-id is in the account's sent maildir.
     Reconcile,
+    /// List draft notes with their status.
+    List,
 }
 
 fn main() {
@@ -148,6 +151,7 @@ fn main() {
             folder,
         } => write::write(stdout, folder, &draft, &cfg),
         Command::Reconcile => reconcile::reconcile(&cfg),
+        Command::List => list::list(&cfg),
     };
 
     if let Err(msg) = result {
