@@ -131,6 +131,8 @@ enum Command {
         #[arg(long)]
         pick: bool,
     },
+    /// Print the effective (merged, resolved) config as TOML. Never sends.
+    Config,
 }
 
 fn main() {
@@ -198,6 +200,7 @@ fn main() {
             paths,
             pick,
         } => list::list(snapshots, paths, pick, &cfg),
+        Command::Config => cfg.to_toml().map(|s| println!("{s}")),
     };
 
     if let Err(msg) = result {

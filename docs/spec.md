@@ -15,7 +15,8 @@ message-id is in the account's sent maildir. `mdmc list` prints draft rows as
 `status  slug` (colour-coded) or, with `--snapshots`, snapshot rows as
 `date  title` (most recent first); `--paths` prints file paths only and `--pick`
 opens a multi-select picker that prints the chosen paths. `mdmc decompile` turns
-a raw message back into a markdown snapshot note. None of them ever send.
+a raw message back into a markdown snapshot note. `mdmc config` prints the
+effective (merged, resolved) config as TOML. None of them ever send.
 
 ## Decompile
 

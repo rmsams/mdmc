@@ -89,6 +89,12 @@ mdmc list --snapshots --paths
 mdmc list --pick             # multi-select picker, prints chosen paths
 ```
 
+Print the effective (merged, resolved) config as TOML:
+
+```sh
+mdmc config
+```
+
 Decompile a message to a markdown snapshot note — by Message-ID (scanned from
 the maildir tree), by file, or from stdin:
 

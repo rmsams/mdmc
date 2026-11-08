@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Expand a leading `~` or `~/` to the user's home directory.
 pub fn expand_home(raw: &str) -> PathBuf {
@@ -84,7 +84,7 @@ where
     }))
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
     pub paths: Paths,
@@ -99,13 +99,13 @@ pub struct Config {
 }
 
 /// A named editor command string (program + args), e.g. `emacsclient -t`.
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Editor {
     pub name: String,
     pub command: String,
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Paths {
     pub source: Option<String>,
     pub attachments: Option<String>,
@@ -114,7 +114,7 @@ pub struct Paths {
     pub snapshots: Option<String>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Defaults {
     pub account: Option<String>,
     pub css: Option<String>,
@@ -127,7 +127,7 @@ pub struct Defaults {
     pub lua_filters: Option<Vec<String>>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Account {
     pub from: Option<String>,
     pub realname: Option<String>,
@@ -338,6 +338,11 @@ impl Config {
             .map(|e| format!("{e} \"$@\""))
             .unwrap_or_else(|_| "vi \"$@\"".to_string()))
     }
+
+    /// Serialize the effective config to TOML (resolved absolute paths).
+    pub fn to_toml(&self) -> Result<String, String> {
+        toml::to_string_pretty(self).map_err(|e| format!("cannot serialize config: {e}"))
+    }
 }
 
 #[cfg(test)]
@@ -481,5 +486,23 @@ command = "obs open"
         assert_eq!(cfg.editor(None).unwrap(), "emacsclient -t");
         assert_eq!(cfg.editor(Some("obsidian")).unwrap(), "obs open");
         assert!(cfg.editor(Some("nope")).is_err());
+    }
+
+    #[test]
+    fn to_toml_serializes_resolved_config() {
+        let toml = r#"
+[paths]
+source = "~/kb/ops/mail/drafts"
+
+[[editors]]
+name = "emacs"
+command = "emacsclient -t \"$@\""
+"#;
+        let cfg = Config::load(&temp_config(toml));
+        let out = cfg.to_toml().unwrap();
+        assert!(out.contains("[paths]"));
+        assert!(out.contains("source = "));
+        assert!(out.contains("[[editors]]"));
+        assert!(out.contains("name = \"emacs\""));
     }
 }
