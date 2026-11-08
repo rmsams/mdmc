@@ -51,12 +51,14 @@ mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format 
 ```
 
 Open an existing draft in `$EDITOR` — by slug, path, or Message-ID, or an
-interactive picker when given no argument (sent drafts excluded unless `--all`):
+interactive picker when given no argument (sent drafts excluded unless `--all`).
+`--editor <name>` selects a named editor from `[editors]`:
 
 ```sh
 mdmc edit hello
 mdmc edit abc123@x
 mdmc edit --all
+mdmc edit hello --editor obsidian
 ```
 
 Compile it and print to stdout:
@@ -136,7 +138,18 @@ account = "rmsams-gmail"
 css = "email"                        # name or path; html only
 template = "email.html"              # name or path
 lua-filters = ["email"]              # names or paths
+
+[[editors]]
+name = "emacs"
+command = "emacsclient -t"
+
+[[editors]]
+name = "obsidian"
+command = "obs open"
 ```
+
+An editor is a command string. `mdmc edit` uses `--editor <name>`, else the
+first `[[editors]]` entry, else `$EDITOR`.
 
 An asset name without a `/` resolves under `pandoc_data` (filters, templates,
 and CSS themes). A value with a `/` is a path and is used directly.

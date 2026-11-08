@@ -12,6 +12,15 @@ pub fn gen_message_id() -> String {
     format!("{}@{}", uuid::Uuid::new_v4(), hostname())
 }
 
+/// Run an editor command string (program + args) on a file, via `sh -c`, so the
+/// command supports arguments and shell quoting (git-style).
+pub fn run_editor_command(command: &str, path: &std::path::Path) {
+    let _ = std::process::Command::new("sh")
+        .args(["-c", "$0 \"$@\"", command])
+        .arg(path)
+        .status();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

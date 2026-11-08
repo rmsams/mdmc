@@ -94,6 +94,15 @@ pub struct Config {
     pub defaults: Defaults,
     #[serde(default)]
     pub accounts: BTreeMap<String, Account>,
+    #[serde(default)]
+    pub editors: Vec<Editor>,
+}
+
+/// A named editor command string (program + args), e.g. `emacsclient -t`.
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Editor {
+    pub name: String,
+    pub command: String,
 }
 
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -206,6 +215,11 @@ impl Config {
                 lua_filters: local.defaults.lua_filters.or(global.defaults.lua_filters),
             },
             accounts: merge_map(local.accounts, global.accounts),
+            editors: if local.editors.is_empty() {
+                global.editors
+            } else {
+                local.editors
+            },
         }
     }
 
@@ -286,6 +300,41 @@ impl Config {
                 }
             )
         })
+    }
+
+    /// Resolve an editor command string. An explicit `name` is looked up in
+    /// `[editors]`; otherwise the first configured editor is used, falling back
+    /// to `$VISUAL`/`$EDITOR` (`vi` when neither is set).
+    pub fn editor(&self, name: Option<&str>) -> Result<String, String> {
+        if let Some(name) = name {
+            return self
+                .editors
+                .iter()
+                .find(|e| e.name == name)
+                .map(|e| e.command.clone())
+                .ok_or_else(|| {
+                    let available = self
+                        .editors
+                        .iter()
+                        .map(|e| e.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "editor '{name}' not configured. Available: {}",
+                        if available.is_empty() {
+                            "(none)"
+                        } else {
+                            &available
+                        }
+                    )
+                });
+        }
+        if let Some(first) = self.editors.first() {
+            return Ok(first.command.clone());
+        }
+        Ok(std::env::var("VISUAL")
+            .or_else(|_| std::env::var("EDITOR"))
+            .unwrap_or_else(|_| "vi".to_string()))
     }
 }
 
@@ -411,5 +460,24 @@ from = "b@local"
 
         assert_eq!(cfg.paths_source().unwrap(), dir.join("source"));
         assert_eq!(cfg.paths_attachments().unwrap(), dir.join("attachments"));
+    }
+
+    #[test]
+    fn load_parses_editors_and_resolves_by_name() {
+        let toml = r#"
+[[editors]]
+name = "emacs"
+command = "emacsclient -t"
+
+[[editors]]
+name = "obsidian"
+command = "obs open"
+"#;
+        let cfg = Config::load(&temp_config(toml));
+
+        assert_eq!(cfg.editors.len(), 2);
+        assert_eq!(cfg.editor(None).unwrap(), "emacsclient -t");
+        assert_eq!(cfg.editor(Some("obsidian")).unwrap(), "obs open");
+        assert!(cfg.editor(Some("nope")).is_err());
     }
 }

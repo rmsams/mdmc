@@ -88,6 +88,9 @@ enum Command {
     Edit {
         /// Draft slug, path, or Message-ID to open; omit for a picker
         input: Option<String>,
+        /// Editor name from [editors] (default: first configured, else $EDITOR)
+        #[arg(long)]
+        editor: Option<String>,
         /// Include sent drafts in the picker
         #[arg(long)]
         all: bool,
@@ -166,7 +169,9 @@ fn main() {
             encrypt,
             editor,
         ),
-        Command::Edit { input, all } => edit::edit(input.as_deref(), all, &cfg),
+        Command::Edit { input, editor, all } => {
+            edit::edit(input.as_deref(), editor.as_deref(), all, &cfg)
+        }
         Command::Compile {
             draft,
             stdout,

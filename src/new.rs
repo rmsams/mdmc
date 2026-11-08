@@ -31,20 +31,6 @@ fn slugify(text: &str) -> String {
     }
 }
 
-pub(crate) fn run_editor(path: &std::path::Path) {
-    let editor = std::env::var("VISUAL")
-        .or_else(|_| std::env::var("EDITOR"))
-        .unwrap_or_else(|_| "vi".to_string());
-    let parts: Vec<&str> = editor.split_whitespace().collect();
-    if parts.is_empty() {
-        return;
-    }
-    let _ = std::process::Command::new(parts[0])
-        .args(&parts[1..])
-        .arg(path)
-        .status();
-}
-
 /// Create a new email draft. Never sends.
 #[allow(clippy::too_many_arguments)]
 pub fn new(
@@ -172,7 +158,9 @@ pub fn new(
     std::fs::write(&path, note).map_err(|e| format!("cannot write draft: {e}"))?;
 
     if editor {
-        run_editor(&path);
+        if let Ok(command) = cfg.editor(None) {
+            crate::util::run_editor_command(&command, &path);
+        }
     }
 
     println!("draft: {}", path.display());

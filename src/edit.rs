@@ -3,16 +3,24 @@ use std::path::{Path, PathBuf};
 use crate::config::Config;
 use crate::frontmatter;
 
-/// Open a draft in `$EDITOR`. With an input, resolve a slug, path, or
+/// Open a draft in an editor. With an input, resolve a slug, path, or
 /// Message-ID to a draft; with no input, present an interactive picker over the
-/// source directory (sent drafts excluded unless `--all`). Never sends.
-pub fn edit(input: Option<&str>, all: bool, cfg: &Config) -> Result<(), String> {
+/// source directory (sent drafts excluded unless `--all`). The editor is a
+/// `--editor` name, else the first configured editor, else `$EDITOR`. Never
+/// sends.
+pub fn edit(
+    input: Option<&str>,
+    editor: Option<&str>,
+    all: bool,
+    cfg: &Config,
+) -> Result<(), String> {
     let source_dir = cfg.paths_source()?;
     let path = match input {
         Some(arg) => resolve_draft(arg, &source_dir)?,
         None => pick_draft(&source_dir, all)?,
     };
-    crate::new::run_editor(&path);
+    let command = cfg.editor(editor)?;
+    crate::util::run_editor_command(&command, &path);
     Ok(())
 }
 

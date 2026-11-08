@@ -123,7 +123,19 @@ refs = "~/Mail/rmsams-gmail.com/Reference"
 css = "email"
 template = "email.html"
 lua-filters = ["email"]
+
+[[editors]]
+name = "emacs"
+command = "emacsclient -t"
+
+[[editors]]
+name = "obsidian"
+command = "obs open"
 ```
+
+An editor is a command string (program + args), run via `sh -c` so it supports
+arguments and quoting. `mdmc edit` uses `--editor <name>`, else the first
+`[[editors]]` entry, else `$VISUAL`/`$EDITOR` (`vi` when neither is set).
 
 mdmc resolves its config in this order:
 
