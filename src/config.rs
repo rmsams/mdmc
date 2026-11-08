@@ -20,6 +20,54 @@ fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
+/// Resolve a config path: `~` against HOME, absolute as-is, relative against
+/// the config file's directory.
+fn resolve_path(raw: &str, base: &Path) -> PathBuf {
+    if raw.starts_with('~') {
+        expand_home(raw)
+    } else if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        base.join(raw)
+    }
+}
+
+fn merge_map<K: Ord, V>(local: BTreeMap<K, V>, global: BTreeMap<K, V>) -> BTreeMap<K, V> {
+    let mut merged = global;
+    for (k, v) in local {
+        merged.insert(k, v);
+    }
+    merged
+}
+
+/// Discover the effective config: an explicit `--config` path wins; otherwise a
+/// local `.mdmc.toml` (found by walking up from the current directory) is
+/// merged over the global `~/.config/mail/config.toml`.
+pub fn discover(flag: Option<PathBuf>) -> Config {
+    if let Some(path) = flag {
+        return Config::load(&path);
+    }
+    let global = Config::load(&expand_home("~/.config/mail/config.toml"));
+    match find_local_config() {
+        Some(local_path) => Config::merge(Config::load(&local_path), global),
+        None => global,
+    }
+}
+
+fn find_local_config() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        let candidate = dir.join(".mdmc.toml");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
 fn de_string_or_list<'de, D>(d: D) -> Result<Option<Vec<String>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -96,10 +144,55 @@ impl Account {
 
 impl Config {
     pub fn load(path: &Path) -> Config {
-        std::fs::read_to_string(path)
+        let mut cfg: Config = std::fs::read_to_string(path)
             .ok()
             .and_then(|text| toml::from_str(&text).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        let base = path.parent().unwrap_or_else(|| Path::new("."));
+        cfg.resolve_paths(base);
+        cfg
+    }
+
+    /// Resolve all path-valued fields against `base`, so the config holds
+    /// absolute paths after loading.
+    fn resolve_paths(&mut self, base: &Path) {
+        if let Some(p) = &mut self.paths.drafts {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
+        if let Some(p) = &mut self.paths.attachments {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
+        if let Some(p) = &mut self.paths.pandoc_data {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
+        for v in self.folders.values_mut() {
+            *v = resolve_path(v, base).to_string_lossy().into_owned();
+        }
+        for acct in self.accounts.values_mut() {
+            if let Some(d) = &mut acct.drafts {
+                *d = resolve_path(d, base).to_string_lossy().into_owned();
+            }
+        }
+    }
+
+    /// Merge a local config over a global one: local fields take precedence,
+    /// and `accounts`/`folders` maps are a union with local precedence.
+    pub fn merge(local: Config, global: Config) -> Config {
+        Config {
+            paths: Paths {
+                drafts: local.paths.drafts.or(global.paths.drafts),
+                attachments: local.paths.attachments.or(global.paths.attachments),
+                pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
+            },
+            folders: merge_map(local.folders, global.folders),
+            defaults: Defaults {
+                account: local.defaults.account.or(global.defaults.account),
+                css: local.defaults.css.or(global.defaults.css),
+                template: local.defaults.template.or(global.defaults.template),
+                lua_filters: local.defaults.lua_filters.or(global.defaults.lua_filters),
+            },
+            accounts: merge_map(local.accounts, global.accounts),
+        }
     }
 
     pub fn paths_drafts(&self) -> PathBuf {
@@ -218,5 +311,63 @@ lua-filters = ["email"]
             ..Default::default()
         };
         assert_eq!(acct.sender(), "a@b.c");
+    }
+
+    fn temp_config(toml: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("mdmc-cfg-{}.toml", uuid::Uuid::new_v4()));
+        std::fs::write(&path, toml).unwrap();
+        path
+    }
+
+    #[test]
+    fn merge_local_overrides_global() {
+        let global = Config::load(&temp_config(
+            r#"
+[defaults]
+account = "global"
+css = "globalcss"
+
+[accounts.a]
+from = "a@global"
+"#,
+        ));
+        let local = Config::load(&temp_config(
+            r#"
+[defaults]
+account = "local"
+
+[accounts.a]
+from = "a@local"
+
+[accounts.b]
+from = "b@local"
+"#,
+        ));
+        let merged = Config::merge(local, global);
+
+        assert_eq!(merged.default_account(), Some("local"));
+        assert_eq!(merged.default_css(), Some("globalcss"));
+        assert_eq!(
+            merged.resolve_account("a").unwrap().from.as_deref(),
+            Some("a@local")
+        );
+        assert_eq!(
+            merged.resolve_account("b").unwrap().from.as_deref(),
+            Some("b@local")
+        );
+    }
+
+    #[test]
+    fn load_resolves_relative_paths_against_config_dir() {
+        let dir = std::env::temp_dir().join(format!("mdmc-cfgdir-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".mdmc.toml");
+        std::fs::write(&path, "[paths]\ndrafts = \"drafts\"\nattachments = \"attachments\"\n")
+            .unwrap();
+        let cfg = Config::load(&path);
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(cfg.paths_drafts(), dir.join("drafts"));
+        assert_eq!(cfg.paths_attachments(), dir.join("attachments"));
     }
 }

@@ -99,9 +99,7 @@ fn main() {
     }
 
     let cli = Cli::parse();
-    let config_path = cli
-        .config
-        .unwrap_or_else(|| config::expand_home("~/.config/mail/config.toml"));
+    let cfg = config::discover(cli.config);
 
     let result = match cli.command {
         Command::New {
@@ -122,7 +120,7 @@ fn main() {
             encrypt,
             editor,
         } => new::new(
-            &config_path,
+            &cfg,
             account,
             to,
             cc,
@@ -144,7 +142,7 @@ fn main() {
             draft,
             stdout,
             folder,
-        } => write::write(stdout, folder, &draft, &config_path),
+        } => write::write(stdout, folder, &draft, &cfg),
     };
 
     if let Err(msg) = result {

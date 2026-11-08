@@ -232,13 +232,12 @@ pub fn write(
     stdout: bool,
     folder: Option<String>,
     draft_arg: &str,
-    config_path: &Path,
+    cfg: &Config,
 ) -> Result<(), String> {
     if stdout && folder.is_some() {
         return Err("--stdout and --folder are mutually exclusive.".into());
     }
 
-    let cfg = Config::load(config_path);
     let drafts_dir = cfg.paths_drafts();
     let attachments_dir = cfg.paths_attachments();
 
@@ -308,7 +307,7 @@ pub fn write(
         }
     }
 
-    let message = compile_message(&cfg, &fm, &body_text, &message_id, &attachments_dir, acct)?;
+    let message = compile_message(cfg, &fm, &body_text, &message_id, &attachments_dir, acct)?;
 
     if stdout {
         std::io::stdout()
@@ -337,7 +336,7 @@ pub fn write(
                 account_name.as_deref().unwrap()
             )
         })?;
-        config::expand_home(drafts)
+        PathBuf::from(drafts)
     };
 
     let dest = maildir_deliver(&target, &message, &message_id)?;

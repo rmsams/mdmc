@@ -48,7 +48,7 @@ fn run_editor(path: &std::path::Path) {
 /// Create a new email draft note. Never sends.
 #[allow(clippy::too_many_arguments)]
 pub fn new(
-    config_path: &std::path::Path,
+    cfg: &Config,
     account: Option<String>,
     to: Option<String>,
     cc: Option<String>,
@@ -72,7 +72,6 @@ pub fn new(
         }
     }
 
-    let cfg = Config::load(config_path);
     let drafts_dir = cfg.paths_drafts();
 
     let acct_name = account

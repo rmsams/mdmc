@@ -71,7 +71,10 @@ Run `mdmc new --help` or `mdmc write --help` for the full option list.
 
 ## Configuration
 
-mdmc reads `--config PATH` (default `~/.config/mail/config.toml`):
+mdmc reads its config from `--config PATH`, or a `.mdmc.toml` in the current
+directory (or any parent), or `~/.config/mail/config.toml` as a fallback. A
+local `.mdmc.toml` merges over the global one, and relative paths resolve
+against the config file's directory.
 
 ```toml
 [paths]

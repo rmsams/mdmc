@@ -60,9 +60,18 @@ template = "email.html"
 lua-filters = ["email"]
 ```
 
-`mdmc` reads `--config PATH` (default `~/.config/mail/config.toml`). It does not
-read neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
-scheme is deferred until a second backend lands.
+mdmc resolves its config in this order:
+
+1. `--config PATH` (explicit override).
+2. A `.mdmc.toml` found in the current directory or any parent (per-repo config).
+3. `~/.config/mail/config.toml`.
+
+A local `.mdmc.toml` is merged over the global config: local fields take
+precedence, and the `accounts`/`folders` maps are a union with local precedence.
+Relative paths in a config file resolve against that file's directory, so a repo
+can use `drafts = "drafts"`. mdmc does not read neomutt config. Bare delivery
+paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
+backend lands.
 
 ## Pandoc defaults
 
