@@ -6,7 +6,7 @@ use crate::frontmatter;
 /// List drafts as `status  slug` rows, colour-coding the status column
 /// when stdout is a terminal.
 pub fn list(cfg: &Config) -> Result<(), String> {
-    let source_dir = cfg.paths_source();
+    let source_dir = cfg.paths_source()?;
     let Ok(entries) = std::fs::read_dir(&source_dir) else {
         return Ok(());
     };

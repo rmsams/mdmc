@@ -90,8 +90,8 @@ against the config file's directory.
 
 ```toml
 [paths]
-source = "~/mail/drafts"             # where markdown drafts live
-attachments = "~/mail/attachments"   # bare-filename base for embeds and attachments
+source = "~/mail/drafts"             # where markdown drafts live (required)
+attachments = "~/mail/attachments"   # bare-filename base for embeds and attachments (required)
 pandoc_data = "~/.local/share/pandoc"
 
 [accounts.rmsams-gmail]

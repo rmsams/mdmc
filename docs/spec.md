@@ -80,7 +80,9 @@ mdmc resolves its config in this order:
 A local `.mdmc.toml` is merged over the global config: local fields take
 precedence, and the `accounts`/`folders` maps are a union with local precedence.
 Relative paths in a config file resolve against that file's directory, so a repo
-can use `source = "drafts"`. mdmc does not read neomutt config. Bare delivery
+can use `source = "drafts"`. `paths.source` and `paths.attachments` are required
+(no default — the tool must not assume a drafts location). `paths.pandoc_data`
+defaults to `~/.local/share/pandoc`. mdmc does not read neomutt config. Bare delivery
 paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
 backend lands.
 

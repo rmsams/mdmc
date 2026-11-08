@@ -6,7 +6,7 @@ use crate::frontmatter;
 /// Mark drafts as `sent` when their message-id is present in the account's
 /// sent maildir. Never sends.
 pub fn reconcile(cfg: &Config) -> Result<(), String> {
-    let source_dir = cfg.paths_source();
+    let source_dir = cfg.paths_source()?;
     let Ok(entries) = std::fs::read_dir(&source_dir) else {
         return Ok(());
     };
@@ -91,7 +91,7 @@ mod tests {
         let text = format!(
             "---\ntitle: {slug}\ntype: mail-draft\nstatus: {status}\naccount: rmsams-gmail\n{msg}---\n\nbody\n"
         );
-        std::fs::write(cfg.paths_source().join(format!("{slug}.md")), text).unwrap();
+        std::fs::write(cfg.paths_source().unwrap().join(format!("{slug}.md")), text).unwrap();
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
 
         reconcile(&cfg).unwrap();
 
-        let text = std::fs::read_to_string(cfg.paths_source().join("foo.md")).unwrap();
+        let text = std::fs::read_to_string(cfg.paths_source().unwrap().join("foo.md")).unwrap();
         assert!(text.contains("status: sent"));
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -118,7 +118,7 @@ mod tests {
 
         reconcile(&cfg).unwrap();
 
-        let text = std::fs::read_to_string(cfg.paths_source().join("foo.md")).unwrap();
+        let text = std::fs::read_to_string(cfg.paths_source().unwrap().join("foo.md")).unwrap();
         assert!(text.contains("status: pending"));
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -130,7 +130,7 @@ mod tests {
 
         reconcile(&cfg).unwrap();
 
-        let text = std::fs::read_to_string(cfg.paths_source().join("foo.md")).unwrap();
+        let text = std::fs::read_to_string(cfg.paths_source().unwrap().join("foo.md")).unwrap();
         assert!(text.contains("status: draft"));
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -72,7 +72,7 @@ pub fn new(
         }
     }
 
-    let drafts_dir = cfg.paths_source();
+    let drafts_dir = cfg.paths_source()?;
 
     let acct_name = account
         .clone()

@@ -199,22 +199,21 @@ impl Config {
         }
     }
 
-    pub fn paths_source(&self) -> PathBuf {
-        expand_home(
-            self.paths
-                .source
-                .as_deref()
-                .unwrap_or("~/kb/ops/mail/drafts"),
-        )
+    pub fn paths_source(&self) -> Result<PathBuf, String> {
+        let raw =
+            self.paths.source.as_deref().ok_or_else(|| {
+                "[paths] source is required (where markdown drafts live)".to_string()
+            })?;
+        Ok(expand_home(raw))
     }
 
-    pub fn paths_attachments(&self) -> PathBuf {
-        expand_home(
-            self.paths
-                .attachments
-                .as_deref()
-                .unwrap_or("~/kb/attachments"),
-        )
+    pub fn paths_attachments(&self) -> Result<PathBuf, String> {
+        let raw = self
+            .paths
+            .attachments
+            .as_deref()
+            .ok_or_else(|| "[paths] attachments is required".to_string())?;
+        Ok(expand_home(raw))
     }
 
     pub fn paths_pandoc_data(&self) -> PathBuf {
@@ -309,6 +308,14 @@ lua-filters = ["email"]
     }
 
     #[test]
+    fn paths_source_and_attachments_error_when_unset() {
+        let cfg = Config::default();
+        assert!(cfg.paths_source().is_err());
+        assert!(cfg.paths_attachments().is_err());
+        assert!(cfg.paths_pandoc_data().ends_with(".local/share/pandoc"));
+    }
+
+    #[test]
     fn sender_omits_realname_when_absent() {
         let acct = Account {
             from: Some("a@b.c".to_string()),
@@ -374,7 +381,7 @@ from = "b@local"
         let cfg = Config::load(&path);
         std::fs::remove_dir_all(&dir).ok();
 
-        assert_eq!(cfg.paths_source(), dir.join("source"));
-        assert_eq!(cfg.paths_attachments(), dir.join("attachments"));
+        assert_eq!(cfg.paths_source().unwrap(), dir.join("source"));
+        assert_eq!(cfg.paths_attachments().unwrap(), dir.join("attachments"));
     }
 }
