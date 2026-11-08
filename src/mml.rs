@@ -595,4 +595,36 @@ mod tests {
             PathBuf::from(format!("{home}/foo.png"))
         );
     }
+
+    #[test]
+    fn resolve_embed_returns_none_for_urls() {
+        let note = Path::new("/notes");
+        let attach = Path::new("/attachments");
+        assert_eq!(
+            resolve_embed("http://example.com/x.png", note, attach),
+            None
+        );
+        assert_eq!(
+            resolve_embed("https://example.com/x.png", note, attach),
+            None
+        );
+        assert_eq!(
+            resolve_embed("data:image/png;base64,abc", note, attach),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_embed_delegates_to_reference_resolution() {
+        let note = Path::new("/notes");
+        let attach = Path::new("/attachments");
+        assert_eq!(
+            resolve_embed("foo.png", note, attach),
+            Some(PathBuf::from("/attachments/foo.png"))
+        );
+        assert_eq!(
+            resolve_embed("sub/foo.png", note, attach),
+            Some(PathBuf::from("/notes/sub/foo.png"))
+        );
+    }
 }
