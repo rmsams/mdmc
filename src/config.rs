@@ -304,7 +304,8 @@ impl Config {
 
     /// Resolve an editor command string. An explicit `name` is looked up in
     /// `[editors]`; otherwise the first configured editor is used, falling back
-    /// to `$VISUAL`/`$EDITOR` (`vi` when neither is set).
+    /// to `$VISUAL`/`$EDITOR` (`vi` when neither is set). The command is a
+    /// `sh -c` script with the file path available as `$1`/`$@`.
     pub fn editor(&self, name: Option<&str>) -> Result<String, String> {
         if let Some(name) = name {
             return self
@@ -334,7 +335,8 @@ impl Config {
         }
         Ok(std::env::var("VISUAL")
             .or_else(|_| std::env::var("EDITOR"))
-            .unwrap_or_else(|_| "vi".to_string()))
+            .map(|e| format!("{e} \"$@\""))
+            .unwrap_or_else(|_| "vi \"$@\"".to_string()))
     }
 }
 

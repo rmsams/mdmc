@@ -128,16 +128,18 @@ lua-filters = ["email"]
 
 [[editors]]
 name = "emacs"
-command = "emacsclient -t"
+command = "emacsclient -t \"$@\""
 
 [[editors]]
 name = "obsidian"
-command = "obs open"
+command = "obs open path=\"$1\""
 ```
 
-An editor is a command string (program + args), run via `sh -c` so it supports
-arguments and quoting. `mdmc edit` uses `--editor <name>`, else the first
-`[[editors]]` entry, else `$VISUAL`/`$EDITOR` (`vi` when neither is set).
+An editor is a `sh -c` command string with the file path available as `$1` (or
+`$@`); the command references it where the path belongs — positional for a
+conventional editor (`emacsclient -t "$@"`), key-value for `obs`
+(`obs open path="$1"`). `mdmc edit` uses `--editor <name>`, else the first
+`[[editors]]` entry, else `$VISUAL`/`$EDITOR` (with `"$@"` appended).
 
 mdmc resolves its config in this order:
 

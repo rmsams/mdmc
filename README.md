@@ -145,15 +145,16 @@ lua-filters = ["email"]              # names or paths
 
 [[editors]]
 name = "emacs"
-command = "emacsclient -t"
+command = "emacsclient -t \"$@\""
 
 [[editors]]
 name = "obsidian"
-command = "obs open"
+command = "obs open path=\"$1\""
 ```
 
-An editor is a command string. `mdmc edit` uses `--editor <name>`, else the
-first `[[editors]]` entry, else `$EDITOR`.
+An editor is a `sh -c` command string with the file path available as `$1`/`$@`.
+`mdmc edit` uses `--editor <name>`, else the first `[[editors]]` entry, else
+`$EDITOR`.
 
 An asset name without a `/` resolves under `pandoc_data` (filters, templates,
 and CSS themes). A value with a `/` is a path and is used directly.

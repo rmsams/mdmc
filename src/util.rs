@@ -12,11 +12,12 @@ pub fn gen_message_id() -> String {
     format!("{}@{}", uuid::Uuid::new_v4(), hostname())
 }
 
-/// Run an editor command string (program + args) on a file, via `sh -c`, so the
-/// command supports arguments and shell quoting (git-style).
+/// Run an editor command string on a file via `sh -c`, with the file path
+/// available as `$1` (and `$@`). The command must reference `$1`/`$@` where the
+/// path belongs — e.g. `emacsclient -t "$@"` or `obs open path="$1"`.
 pub fn run_editor_command(command: &str, path: &std::path::Path) {
     let _ = std::process::Command::new("sh")
-        .args(["-c", "$0 \"$@\"", command])
+        .args(["-c", command, "mdmc-editor"])
         .arg(path)
         .status();
 }
