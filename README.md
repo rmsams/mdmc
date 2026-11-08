@@ -161,4 +161,5 @@ pandoc-raw: true        # optional: skip template, filter, and css
 Body goes here, as markdown.
 ```
 
-See `docs/spec.md` for the design.
+See `docs/spec.md` for the design, and `docs/rfcs.md` for how the tool handles
+the relevant email RFCs.
