@@ -8,7 +8,16 @@ tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 `mdmc new` creates a draft note (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
-RFC 5322 and delivers it. Neither ever sends.
+RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
+message-id is in the account's sent maildir. None of them ever send.
+
+## Status lifecycle
+
+A draft's `status` moves `draft` (created, no message-id) → `pending`
+(compiled and delivered to the drafts maildir) → `sent` (confirmed present in
+the sent maildir). `reconcile` does the last transition by scanning `paths.source`
+and, for each note that is not yet `sent`, looking up its message-id in the
+account's `sent` maildir.
 
 ## Message-id semantics
 
@@ -50,6 +59,7 @@ pandoc_data = "~/.local/share/pandoc"
 from = "rmsams@gmail.com"
 realname = "Robert Sams"
 drafts = "~/Mail/rmsams-gmail.com/[Google Mail].Drafts"  # delivery maildir
+sent = "~/Mail/rmsams-gmail.com/[Google Mail].Sent Mail"  # sent maildir
 
 [folders]
 refs = "~/Mail/rmsams-gmail.com/Reference"

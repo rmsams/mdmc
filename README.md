@@ -59,9 +59,15 @@ Compile it and deliver it to the account's drafts maildir:
 mdmc write hello
 ```
 
-Neither command sends. Sending is left to the tool that owns the delivery
-maildir, or to an SMTP client that reads RFC 5322 from standard input. For
-example, pipe the compiled message straight into msmtp:
+Mark drafts sent once their message-id is in the account's sent maildir:
+
+```sh
+mdmc reconcile
+```
+
+None of these commands send. Sending is left to the tool that owns the
+delivery maildir, or to an SMTP client that reads RFC 5322 from standard input.
+For example, pipe the compiled message straight into msmtp:
 
 ```sh
 mdmc write hello --stdout | msmtp --read-envelope-from --read-recipients
@@ -86,6 +92,7 @@ pandoc_data = "~/.local/share/pandoc"
 from = "rmsams@gmail.com"
 realname = "Robert Sams"
 drafts = "~/Mail/example/Drafts"     # delivery maildir
+sent = "~/Mail/example/Sent"         # sent maildir (for reconcile)
 signing_key = "0x12A96FA9"           # gpg key for signing
 encrypt_to = "0x12A96FA9"            # optional; defaults to signing_key
 

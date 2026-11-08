@@ -47,48 +47,6 @@ fn inject_headers(message: &str, headers: &[String]) -> String {
     out_lines.join("\n")
 }
 
-/// Read a file's `Message-ID` header value (angle brackets stripped), reading
-/// only the header block prefix.
-fn read_message_id(path: &Path) -> Option<String> {
-    use std::io::Read;
-    let mut file = std::fs::File::open(path).ok()?;
-    let mut buf = [0u8; 65536];
-    let n = file.read(&mut buf).ok()?;
-    let text = String::from_utf8_lossy(&buf[..n]);
-    for line in text.lines() {
-        if line.is_empty() {
-            return None;
-        }
-        if let Some((name, val)) = line.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("message-id") {
-                return Some(
-                    val.trim()
-                        .trim_start_matches('<')
-                        .trim_end_matches('>')
-                        .to_string(),
-                );
-            }
-        }
-    }
-    None
-}
-
-/// Find a message with the given Message-ID in a maildir's `new/` and `cur/`.
-fn find_message_in_maildir(dst: &Path, message_id: &str) -> Option<PathBuf> {
-    for sub in ["new", "cur"] {
-        let dir = dst.join(sub);
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && read_message_id(&path).as_deref() == Some(message_id) {
-                    return Some(path);
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Write a message to a maildir's `tmp/` then atomically move it to `new/`,
 /// replacing any existing message with the same Message-ID.
 fn maildir_deliver(dst: &Path, message: &str, message_id: &str) -> Result<PathBuf, String> {
@@ -99,7 +57,7 @@ fn maildir_deliver(dst: &Path, message: &str, message_id: &str) -> Result<PathBu
     std::fs::create_dir_all(&new).map_err(|e| format!("cannot create {new:?}: {e}"))?;
 
     // Locate any prior copy before writing, so a re-write replaces it.
-    let existing = find_message_in_maildir(dst, message_id);
+    let existing = crate::maildir::find_message_in_maildir(dst, message_id);
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

@@ -121,6 +121,7 @@ pub struct Account {
     pub from: Option<String>,
     pub realname: Option<String>,
     pub drafts: Option<String>,
+    pub sent: Option<String>,
     pub signing_key: Option<String>,
     pub encrypt_to: Option<String>,
 }
@@ -171,6 +172,9 @@ impl Config {
         for acct in self.accounts.values_mut() {
             if let Some(d) = &mut acct.drafts {
                 *d = resolve_path(d, base).to_string_lossy().into_owned();
+            }
+            if let Some(s) = &mut acct.sent {
+                *s = resolve_path(s, base).to_string_lossy().into_owned();
             }
         }
     }
