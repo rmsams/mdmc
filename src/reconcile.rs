@@ -11,7 +11,7 @@ pub fn reconcile(cfg: &Config) -> Result<(), String> {
         return Ok(());
     };
 
-    let mut sent = 0;
+    let mut marked: Vec<String> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("md") {
@@ -45,11 +45,17 @@ pub fn reconcile(cfg: &Config) -> Result<(), String> {
 
         let updated = frontmatter::set_fields(&text, &[("status", "sent")]);
         std::fs::write(&path, updated).map_err(|e| format!("cannot update draft: {e}"))?;
-        sent += 1;
-        println!("marked sent: {}", path.file_stem().unwrap().to_string_lossy());
+        marked.push(path.file_stem().unwrap().to_string_lossy().into_owned());
     }
 
-    println!("{sent} draft(s) marked sent");
+    marked.sort();
+    if !marked.is_empty() {
+        println!("marked sent:");
+        for slug in &marked {
+            println!("{slug}");
+        }
+    }
+    println!("{} draft(s) marked sent", marked.len());
     Ok(())
 }
 
