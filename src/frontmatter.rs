@@ -29,6 +29,8 @@ impl<'de> Deserialize<'de> for StringList {
 /// (title, type, status, message-id, …) are ignored.
 #[derive(Debug, Default, Deserialize)]
 pub struct Draft {
+    pub title: Option<String>,
+    pub date: Option<String>,
     pub account: Option<String>,
     #[serde(rename = "to", default)]
     pub to: StringList,

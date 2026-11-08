@@ -79,10 +79,14 @@ Mark drafts sent once their message-id is in the account's sent maildir:
 mdmc reconcile
 ```
 
-List drafts with their status (colour-coded):
+List drafts (or snapshots with `--snapshots`):
 
 ```sh
 mdmc list
+mdmc list --snapshots        # date + title, most recent first
+mdmc list --paths            # file paths only, for piping
+mdmc list --snapshots --paths
+mdmc list --pick             # multi-select picker, prints chosen paths
 ```
 
 Decompile a message to a markdown snapshot note — by Message-ID (scanned from

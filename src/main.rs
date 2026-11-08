@@ -119,8 +119,18 @@ enum Command {
     },
     /// Mark drafts sent when their message-id is in the account's sent maildir.
     Reconcile,
-    /// List drafts with their status.
-    List,
+    /// List drafts (or snapshots). Never sends.
+    List {
+        /// List snapshots instead of drafts
+        #[arg(long)]
+        snapshots: bool,
+        /// Print file paths only
+        #[arg(long)]
+        paths: bool,
+        /// Pick files interactively (multi-select) and print their paths
+        #[arg(long)]
+        pick: bool,
+    },
 }
 
 fn main() {
@@ -183,7 +193,11 @@ fn main() {
             link_attachments,
         } => decompile::decompile(&input, stdout, link_attachments, &cfg),
         Command::Reconcile => reconcile::reconcile(&cfg),
-        Command::List => list::list(&cfg),
+        Command::List {
+            snapshots,
+            paths,
+            pick,
+        } => list::list(snapshots, paths, pick, &cfg),
     };
 
     if let Err(msg) = result {

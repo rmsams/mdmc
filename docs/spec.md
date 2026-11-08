@@ -11,9 +11,11 @@ shipped schema, and optionally opens `$EDITOR`. `mdmc edit` opens an existing
 draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
 compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
-message-id is in the account's sent maildir. `mdmc list` prints `status  slug`
-rows with the status colour-coded. `mdmc decompile` turns a raw message back
-into a markdown snapshot note. None of them ever send.
+message-id is in the account's sent maildir. `mdmc list` prints draft rows as
+`status  slug` (colour-coded) or, with `--snapshots`, snapshot rows as
+`date  title` (most recent first); `--paths` prints file paths only and `--pick`
+opens a multi-select picker that prints the chosen paths. `mdmc decompile` turns
+a raw message back into a markdown snapshot note. None of them ever send.
 
 ## Decompile
 
