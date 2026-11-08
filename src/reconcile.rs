@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::Config;
 use crate::frontmatter;
 
-/// Mark draft notes as `sent` when their message-id is present in the account's
+/// Mark drafts as `sent` when their message-id is present in the account's
 /// sent maildir. Never sends.
 pub fn reconcile(cfg: &Config) -> Result<(), String> {
     let source_dir = cfg.paths_source();

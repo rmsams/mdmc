@@ -25,7 +25,7 @@ impl<'de> Deserialize<'de> for StringList {
     }
 }
 
-/// The frontmatter fields `write` reads from a draft note. Unknown fields
+/// The frontmatter fields `write` reads from a draft. Unknown fields
 /// (title, type, status, message-id, …) are ignored.
 #[derive(Debug, Default, Deserialize)]
 pub struct Draft {

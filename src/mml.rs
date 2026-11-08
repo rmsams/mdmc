@@ -92,7 +92,7 @@ pub fn escape_mml(text: &str) -> String {
 
 /// Resolve a file reference (an embed target or an `attachments` entry) to a
 /// path: `~` against HOME, an absolute path as-is, a relative path with a
-/// separator against the note's directory, and a bare filename against the
+/// separator against the draft's directory, and a bare filename against the
 /// attachments directory.
 pub fn resolve_reference(raw: &str, note_dir: &Path, attachments_dir: &Path) -> PathBuf {
     let t = raw.trim();
@@ -257,7 +257,7 @@ pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// Build the MML body for a note. Returns `(mml_body, inline_cids)`.
+/// Build the MML body for a draft. Returns `(mml_body, inline_cids)`.
 ///
 /// Image embeds become inline `cid:` parts in html format and attachments
 /// otherwise; non-image embeds degrade to attachments.

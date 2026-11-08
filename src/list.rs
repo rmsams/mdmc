@@ -3,7 +3,7 @@ use std::io::{IsTerminal, Write};
 use crate::config::Config;
 use crate::frontmatter;
 
-/// List draft notes as `status  slug` rows, colour-coding the status column
+/// List drafts as `status  slug` rows, colour-coding the status column
 /// when stdout is a terminal.
 pub fn list(cfg: &Config) -> Result<(), String> {
     let source_dir = cfg.paths_source();

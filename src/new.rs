@@ -45,7 +45,7 @@ fn run_editor(path: &std::path::Path) {
         .status();
 }
 
-/// Create a new email draft note. Never sends.
+/// Create a new email draft. Never sends.
 #[allow(clippy::too_many_arguments)]
 pub fn new(
     cfg: &Config,

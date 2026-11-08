@@ -17,7 +17,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "mdmc",
     version,
-    about = "Markdown mail compiler — compile markdown draft notes to RFC 5322 email"
+    about = "Markdown mail compiler — compile markdown drafts to RFC 5322 email"
 )]
 struct Cli {
     /// Path to config.toml (default ~/.config/mail/config.toml)
@@ -31,7 +31,7 @@ struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Command {
-    /// Create a new email draft note. Never sends.
+    /// Create a new email draft. Never sends.
     New {
         /// Account name (default: [defaults].account in config)
         #[arg(long)]
@@ -78,11 +78,11 @@ enum Command {
         /// Encrypt the message to the recipients
         #[arg(long)]
         encrypt: bool,
-        /// Open $EDITOR on the note after writing
+        /// Open $EDITOR on the draft after writing
         #[arg(long)]
         editor: bool,
     },
-    /// Compile a draft note to a message (RFC 5322). Never sends.
+    /// Compile a draft to a message (RFC 5322). Never sends.
     Write {
         /// Draft filename (slug) or path to compile
         draft: String,
@@ -95,7 +95,7 @@ enum Command {
     },
     /// Mark drafts sent when their message-id is in the account's sent maildir.
     Reconcile,
-    /// List draft notes with their status.
+    /// List drafts with their status.
     List,
 }
 

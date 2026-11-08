@@ -185,7 +185,7 @@ fn compile_message(
     Ok(message.replace('\n', "\r\n"))
 }
 
-/// Compile a draft note to a message. With `--stdout`, print the RFC 5322
+/// Compile a draft to a message. With `--stdout`, print the RFC 5322
 /// message; with `--folder`, deliver to a `[folders]` target; otherwise
 /// deliver to the account's `drafts` maildir.
 pub fn write(

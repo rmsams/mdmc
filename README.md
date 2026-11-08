@@ -1,10 +1,10 @@
 # mdmc
 
-mdmc compiles markdown draft notes into RFC 5322 email. It never sends.
+mdmc compiles markdown drafts into RFC 5322 email. It never sends.
 
-A draft note is a markdown file with YAML frontmatter that holds the envelope
+A draft is a markdown file with YAML frontmatter that holds the envelope
 (account, subject, recipients) and the message body below it. `mdmc new`
-creates the note; `mdmc write` compiles it to MIME and delivers it to stdout, a
+creates the draft; `mdmc write` compiles it to MIME and delivers it to stdout, a
 named folder, or an account's drafts maildir.
 
 ## Features
@@ -12,7 +12,7 @@ named folder, or an account's drafts maildir.
 - Markdown body converted with pandoc: to HTML (with a template, Lua filters,
   and a CSS theme) or to plain text.
 - An embedded email template, filter, and theme are used by default, so HTML
-  email works without extra setup. Override them per note or per config, or
+  email works without extra setup. Override them per draft or per config, or
   disable them with `pandoc-raw`.
 - OpenPGP signing and encryption (PGP/MIME, RFC 3156) via gpg.
 - A message-id is assigned at `new` time and reused on every `write`, so
@@ -41,7 +41,7 @@ devenv shell
 
 ## Usage
 
-Create a draft note:
+Create a draft:
 
 ```sh
 mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format html --body "Hi **there**."
@@ -90,7 +90,7 @@ against the config file's directory.
 
 ```toml
 [paths]
-source = "~/mail/drafts"             # where markdown draft notes live
+source = "~/mail/drafts"             # where markdown drafts live
 attachments = "~/mail/attachments"   # bare-filename base for embeds and attachments
 pandoc_data = "~/.local/share/pandoc"
 
@@ -117,9 +117,9 @@ and CSS themes). A value with a `/` is a path and is used directly.
 
 Embed and attachment references resolve by shape: a bare filename (`foo.png`)
 resolves under `paths.attachments`; a path with a `/` resolves relative to the
-note's directory; `~` resolves against home; an absolute path is used as-is.
+draft's directory; `~` resolves against home; an absolute path is used as-is.
 
-## Draft note format
+## Draft format
 
 The frontmatter fields:
 

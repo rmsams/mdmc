@@ -1,11 +1,11 @@
 # mdmc — design
 
 `mdmc` (markdown mail compiler) is a Rust reimplementation of the Python `mail`
-tool. It compiles markdown draft notes to RFC 5322 email and never sends.
+tool. It compiles markdown drafts to RFC 5322 email and never sends.
 
 ## Commands
 
-`mdmc new` creates a draft note (frontmatter + markdown body) under
+`mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
@@ -17,13 +17,13 @@ rows with the status colour-coded. None of them ever send.
 A draft's `status` moves `draft` (created, no message-id) → `pending`
 (compiled and delivered to the drafts maildir) → `sent` (confirmed present in
 the sent maildir). `reconcile` does the last transition by scanning `paths.source`
-and, for each note that is not yet `sent`, looking up its message-id in the
+and, for each draft that is not yet `sent`, looking up its message-id in the
 account's `sent` maildir.
 
 ## Message-id semantics
 
 A draft's Message-ID is a random UUID v4 plus the local hostname, assigned once
-at `new` time and persisted in the note's frontmatter. `write` reuses the
+at `new` time and persisted in the draft's frontmatter. `write` reuses the
 persisted id (falling back to generating one only for drafts that lack it), so
 every delivery mode — `--stdout`, `--folder`, and the drafts maildir — emits the
 same Message-ID. Maildir delivery overwrites any existing message carrying the
@@ -35,9 +35,9 @@ idempotent and never leaves stale duplicate drafts.
 `write <draft>`:
 
 1. Load `config.toml` (paths, folders, accounts, defaults).
-2. Load the draft note's `---` frontmatter (YAML) + body.
+2. Load the draft's `---` frontmatter (YAML) + body.
 3. Resolve the account's `from`/`realname` from `[accounts.<name>]`.
-4. Reuse the note's `message-id` (or generate one for legacy drafts).
+4. Reuse the draft's `message-id` (or generate one for legacy drafts).
 5. Optionally append a reply quote (`notmuch show` → `id:` lookup).
 6. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
    with `![[…]]` image embeds becoming inline `cid:` parts.
@@ -46,13 +46,13 @@ idempotent and never leaves stale duplicate drafts.
 8. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
    restore CRLF.
 9. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
-   the account's `drafts` maildir (then write `status: pending` back to the note).
+   the account's `drafts` maildir (then write `status: pending` back to the draft).
 
 ## Config schema
 
 ```toml
 [paths]
-source = "~/kb/ops/mail/drafts"      # markdown draft-note directory
+source = "~/kb/ops/mail/drafts"      # markdown drafts directory
 attachments = "~/kb/attachments"     # bare-filename base for embeds and attachments
 pandoc_data = "~/.local/share/pandoc"
 
@@ -85,7 +85,7 @@ paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
 backend lands.
 
 Embed and `attachments` references resolve by shape: a bare filename under
-`paths.attachments`, a path with a separator relative to the note's directory,
+`paths.attachments`, a path with a separator relative to the draft's directory,
 `~` against home, and an absolute path as-is.
 
 ## Pandoc defaults
@@ -124,7 +124,7 @@ integration time.
 The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
 `schema/mail-draft.schema.json` and embedded in the binary via `include_str!`.
 `new` validates the frontmatter it builds against it (using the `jsonschema`
-crate) before writing, and `write` validates the frontmatter of the note it
+crate) before writing, and `write` validates the frontmatter of the draft it
 loads before compiling. There is no dependency on `~/kb` or the external
 `kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
 location is controlled by `paths.source` in config.
