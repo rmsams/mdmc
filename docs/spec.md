@@ -34,7 +34,8 @@ Message-ID whose snapshot already exists is skipped.
 
 The frontmatter carries the envelope: `title` (the Subject, falling back to
 `(no subject)`), `type` (`mail-snapshot`), `message-id` (the raw id, the key),
-`from`, `date` (RFC 3339), and optional `to`/`cc` (address arrays),
+`from`, `date` (RFC 3339), and optional `to`/`cc` (address arrays, rendered
+`Name <addr>`),
 `in-reply-to`, `references`, `attachments` (an array of `{ file, content-type }`
 objects). The body is the converted message; `--link-attachments` additionally
 appends an `## Attachments` section listing the discrete attachment files.

@@ -374,7 +374,8 @@ fn format_mailbox(mailbox: &Mailbox) -> String {
 
 fn addresses(list: &AddressList) -> Vec<String> {
     list.mailboxes()
-        .filter_map(|mailbox| mailbox.address().map(str::to_string))
+        .map(|mailbox| format_mailbox(&mailbox))
+        .filter(|s| !s.is_empty())
         .collect()
 }
 
@@ -439,14 +440,14 @@ mod tests {
     }
 
     #[test]
-    fn addresses_extracts_bare_addresses() {
+    fn addresses_preserves_display_names() {
         let raw = b"From: Ann <ann@example.com>\r\n\
             To: Bob <bob@example.com>, team: cy@example.com, dee@example.com;\r\n\r\nBody";
         let message = MessageParser::new().parse(raw).unwrap();
         let to = message.to().unwrap();
         assert_eq!(
             addresses(&to),
-            vec!["bob@example.com", "cy@example.com", "dee@example.com"]
+            vec!["Bob <bob@example.com>", "cy@example.com", "dee@example.com"]
         );
     }
 
@@ -579,7 +580,7 @@ mod tests {
         assert!(note.contains("type: mail-snapshot\n"));
         assert!(note.contains("message-id: m1@example.com\n"));
         assert!(note.contains("from: Ann <ann@example.com>\n"));
-        assert!(note.contains("to:\n  - bob@example.com\n"));
+        assert!(note.contains("to:\n  - Bob <bob@example.com>\n"));
         assert!(note.contains(
             "attachments:\n  - file: m1@example.com--report.pdf\n    content-type: application/pdf\n"
         ));
