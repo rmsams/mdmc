@@ -73,6 +73,9 @@ Compile it and deliver it to the account's drafts maildir:
 mdmc compile hello
 ```
 
+A draft already marked `sent` is refused unless you pass `--again` (recompile a
+sent draft):
+
 Mark drafts sent once their message-id is in the account's sent maildir:
 
 ```sh

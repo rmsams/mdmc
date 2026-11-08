@@ -105,6 +105,9 @@ enum Command {
         /// Write to this maildir: a [folders] config name or a literal path
         #[arg(long)]
         folder: Option<String>,
+        /// Allow compiling a draft already marked sent
+        #[arg(long)]
+        again: bool,
     },
     /// Decompile a message to a markdown snapshot note. Never sends.
     Decompile {
@@ -188,7 +191,8 @@ fn main() {
             draft,
             stdout,
             folder,
-        } => compile::compile(stdout, folder, &draft, &cfg),
+            again,
+        } => compile::compile(stdout, folder, again, &draft, &cfg),
         Command::Decompile {
             input,
             stdout,

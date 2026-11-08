@@ -9,8 +9,8 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. `mdmc edit` opens an existing
 draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
-compiles a draft to
-RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
+compiles a draft to RFC 5322 and delivers it, refusing a draft already marked
+`sent` unless `--again` is given. `mdmc reconcile` marks drafts `sent` once their
 message-id is in the account's sent maildir. `mdmc list` prints draft rows as
 `status  slug` (colour-coded) or, with `--snapshots`, snapshot rows as
 `date  title` (most recent first); `--paths` prints file paths only and `--pick`

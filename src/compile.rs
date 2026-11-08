@@ -187,10 +187,12 @@ fn compile_message(
 
 /// Compile a draft to a message. With `--stdout`, print the RFC 5322
 /// message; with `--folder`, deliver to a `[folders]` target; otherwise
-/// deliver to the account's `drafts` maildir.
+/// deliver to the account's `drafts` maildir. A draft already marked `sent`
+/// is refused unless `again` is set.
 pub fn compile(
     stdout: bool,
     folder: Option<String>,
+    again: bool,
     draft_arg: &str,
     cfg: &Config,
 ) -> Result<(), String> {
@@ -225,6 +227,9 @@ pub fn compile(
     let (Some(fm), fm_json, body) = frontmatter::load(&text) else {
         return Err(format!("{} has no valid frontmatter.", arg.display()));
     };
+    if fm.status.as_deref() == Some("sent") && !again {
+        return Err("draft is already sent; use --again to recompile".to_string());
+    }
     if let Some(fm_json) = fm_json {
         if let Err(errors) = frontmatter::validate(&fm_json) {
             return Err(format!("invalid frontmatter:\n{}", errors.join("\n")));
@@ -390,6 +395,42 @@ mod tests {
         // a distinct message-id is not overwritten
         maildir_deliver(&dir, "Message-ID: <b@x>\n\nother\n", "b@x").unwrap();
         assert_eq!(std::fs::read_dir(dir.join("new")).unwrap().count(), 2);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn compile_refuses_sent_draft_without_again() {
+        let dir = std::env::temp_dir().join(format!("mdmc-compile-{}", uuid::Uuid::new_v4()));
+        let source = dir.join("drafts");
+        let attachments = dir.join("attachments");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&attachments).unwrap();
+
+        let cfg = Config {
+            paths: config::Paths {
+                source: Some(source.to_string_lossy().into_owned()),
+                attachments: Some(attachments.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+            accounts: std::collections::BTreeMap::from([(
+                "rmsams-gmail".to_string(),
+                config::Account {
+                    from: Some("a@b.c".to_string()),
+                    ..Default::default()
+                },
+            )]),
+            ..Default::default()
+        };
+
+        std::fs::write(
+            source.join("foo.md"),
+            "---\ntitle: foo\ntype: mail-draft\nstatus: sent\naccount: rmsams-gmail\nsubject: hi\nto:\n  - x@y.c\n---\n\nbody\n",
+        )
+        .unwrap();
+
+        assert!(compile(true, None, false, "foo", &cfg).is_err());
+        assert!(compile(true, None, true, "foo", &cfg).is_ok());
 
         std::fs::remove_dir_all(&dir).ok();
     }
