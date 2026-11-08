@@ -46,7 +46,7 @@ pub fn reconcile(cfg: &Config) -> Result<(), String> {
         let updated = frontmatter::set_fields(&text, &[("status", "sent")]);
         std::fs::write(&path, updated).map_err(|e| format!("cannot update draft: {e}"))?;
         sent += 1;
-        println!("sent: {}", path.file_stem().unwrap().to_string_lossy());
+        println!("marked sent: {}", path.file_stem().unwrap().to_string_lossy());
     }
 
     println!("{sent} draft(s) marked sent");
