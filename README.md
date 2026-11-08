@@ -50,6 +50,15 @@ Create a draft:
 mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format html --body "Hi **there**."
 ```
 
+Open an existing draft in `$EDITOR` — by slug, path, or Message-ID, or an
+interactive picker when given no argument (sent drafts excluded unless `--all`):
+
+```sh
+mdmc edit hello
+mdmc edit abc123@x
+mdmc edit --all
+```
+
 Compile it and print to stdout:
 
 ```sh

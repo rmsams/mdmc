@@ -1,6 +1,7 @@
 mod compile;
 mod config;
 mod decompile;
+mod edit;
 mod frontmatter;
 mod list;
 mod maildir;
@@ -83,6 +84,14 @@ enum Command {
         #[arg(long)]
         editor: bool,
     },
+    /// Open a draft in $EDITOR (interactive picker when no input). Never sends.
+    Edit {
+        /// Draft slug, path, or Message-ID to open; omit for a picker
+        input: Option<String>,
+        /// Include sent drafts in the picker
+        #[arg(long)]
+        all: bool,
+    },
     /// Compile a draft to a message (RFC 5322). Never sends.
     Compile {
         /// Draft filename (slug) or path to compile
@@ -157,6 +166,7 @@ fn main() {
             encrypt,
             editor,
         ),
+        Command::Edit { input, all } => edit::edit(input.as_deref(), all, &cfg),
         Command::Compile {
             draft,
             stdout,

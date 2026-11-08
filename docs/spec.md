@@ -7,7 +7,9 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 
 `mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
-shipped schema, and optionally opens `$EDITOR`. `mdmc compile` compiles a draft to
+shipped schema, and optionally opens `$EDITOR`. `mdmc edit` opens an existing
+draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
+compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
 message-id is in the account's sent maildir. `mdmc list` prints `status  slug`
 rows with the status colour-coded. `mdmc decompile` turns a raw message back
@@ -195,6 +197,7 @@ construction, so it does not validate; the schema is for external validation
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
+- `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).

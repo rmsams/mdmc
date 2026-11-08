@@ -31,7 +31,7 @@ fn slugify(text: &str) -> String {
     }
 }
 
-fn run_editor(path: &std::path::Path) {
+pub(crate) fn run_editor(path: &std::path::Path) {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".to_string());
