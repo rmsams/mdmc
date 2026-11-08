@@ -41,3 +41,31 @@ pub fn find_message_in_maildir(dst: &Path, message_id: &str) -> Option<PathBuf> 
     }
     None
 }
+
+/// Find a message with the given Message-ID anywhere under a maildir tree,
+/// walking subdirectories for maildir `cur`/`new` folders.
+pub fn find_message_in_tree(root: &Path, message_id: &str) -> Option<PathBuf> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut subdirs = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path.file_name()?.to_string_lossy();
+            if name == "cur" {
+                if let Some(found) = find_message_in_maildir(&dir, message_id) {
+                    return Some(found);
+                }
+            } else if name != "new" {
+                subdirs.push(path);
+            }
+        }
+        stack.extend(subdirs);
+    }
+    None
+}

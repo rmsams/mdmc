@@ -10,7 +10,55 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
 message-id is in the account's sent maildir. `mdmc list` prints `status  slug`
-rows with the status colour-coded. None of them ever send.
+rows with the status colour-coded. `mdmc decompile` turns a raw message back
+into a markdown snapshot note. None of them ever send.
+
+## Decompile
+
+`mdmc decompile <input> [--stdout]` is the read side: it turns a raw RFC 5322
+message into a markdown snapshot note (a `mail-snapshot`). The inverse of
+`write`. It never sends.
+
+The `<input>` is disambiguated by shape: `-` reads a raw message from stdin; a
+path to an existing file reads that file as raw message; anything else is
+treated as a Message-ID, resolved by scanning the maildir tree under
+`[paths] mail` (reusing `maildir::read_message_id`, which reads only the header
+prefix). Notmuch is not required.
+
+The snapshot note lives at `[paths] snapshots/<slug>.md`, where `slug` is a
+filesystem-safe form of the message's Message-ID (identity for
+`[A-Za-z0-9._@+-]`, percent-encode otherwise, strip a leading `.`, truncate ids
+over 240 characters with an 8-hex hash). `--stdout` prints the note instead of
+writing it (and suppresses attachment extraction). Extraction is idempotent — a
+Message-ID whose snapshot already exists is skipped.
+
+The frontmatter carries the envelope: `title` (the Subject, falling back to
+`(no subject)`), `type` (`mail-snapshot`), `message-id` (the raw id, the key),
+`from`, `date` (RFC 3339), and optional `to`/`cc` (address arrays),
+`in-reply-to`, `references`, `attachments`. The body is the converted message;
+`--link-attachments` additionally appends an `## Attachments` section listing
+the discrete attachment files.
+
+### Conversion
+
+`mdmc decompile` parses the raw message with the `mail-parser` crate and renders
+the body to markdown. Text is preferred: a `text/plain` part is used verbatim;
+otherwise the `text/html` part is converted with `pandoc -f html -t gfm`.
+Quoted reply chains stay in the single body; threads are not split.
+
+Inline `cid:` images are rewritten by a generated Lua filter that walks the
+pandoc AST: `mdmc` emits a temporary filter holding the `cid → filename` map,
+and the filter rewrites `Image` sources before the writer runs. This operates on
+the AST, not the HTML text, so it touches only real image elements.
+
+### Attachments
+
+Discrete attachments and inline `cid:` images are extracted to
+`[paths] attachments/<message-id>--<name>` (the name sanitised to a single path
+component). Inline images are embedded in the body (see Conversion) and are not
+re-listed; discrete attachments appear in the `## Attachments` section only
+under `--link-attachments`. The frontmatter `attachments` field always lists every
+extracted file. A tracking-pixel filter is deferred.
 
 ## Status lifecycle
 
@@ -55,6 +103,8 @@ idempotent and never leaves stale duplicate drafts.
 source = "~/kb/ops/mail/drafts"      # markdown drafts directory
 attachments = "~/kb/attachments"     # bare-filename base for embeds and attachments
 pandoc_data = "~/.local/share/pandoc"
+mail = "~/Mail"                      # maildir root for Message-ID resolution
+snapshots = "~/kb/ops/mail/refs"     # decompiled snapshot notes
 
 [accounts.rmsams-gmail]
 from = "rmsams@gmail.com"
@@ -81,7 +131,9 @@ A local `.mdmc.toml` is merged over the global config: local fields take
 precedence, and the `accounts`/`folders` maps are a union with local precedence.
 Relative paths in a config file resolve against that file's directory, so a repo
 can use `source = "drafts"`. `paths.source` and `paths.attachments` are required
-(no default — the tool must not assume a drafts location). `paths.pandoc_data`
+(no default — the tool must not assume a drafts location). `paths.mail` is
+required only for Message-ID resolution (`decompile`), and `paths.snapshots`
+only for `decompile` without `--stdout`. `paths.pandoc_data`
 defaults to `~/.local/share/pandoc`. mdmc does not read neomutt config. Bare delivery
 paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
 backend lands.
@@ -131,9 +183,15 @@ loads before compiling. There is no dependency on `~/kb` or the external
 `kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
 location is controlled by `paths.source` in config.
 
+The read side's `mail-snapshot` schema ships at
+`schema/mail-snapshot.schema.json`. `decompile` generates valid frontmatter by
+construction, so it does not validate; the schema is for external validation
+(e.g. `kb-validate`).
+
 ## Module map
 
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
+- `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).

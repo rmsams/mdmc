@@ -101,6 +101,8 @@ pub struct Paths {
     pub source: Option<String>,
     pub attachments: Option<String>,
     pub pandoc_data: Option<String>,
+    pub mail: Option<String>,
+    pub snapshots: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -166,6 +168,12 @@ impl Config {
         if let Some(p) = &mut self.paths.pandoc_data {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
+        if let Some(p) = &mut self.paths.mail {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
+        if let Some(p) = &mut self.paths.snapshots {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
         for v in self.folders.values_mut() {
             *v = resolve_path(v, base).to_string_lossy().into_owned();
         }
@@ -187,6 +195,8 @@ impl Config {
                 source: local.paths.source.or(global.paths.source),
                 attachments: local.paths.attachments.or(global.paths.attachments),
                 pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
+                mail: local.paths.mail.or(global.paths.mail),
+                snapshots: local.paths.snapshots.or(global.paths.snapshots),
             },
             folders: merge_map(local.folders, global.folders),
             defaults: Defaults {
@@ -223,6 +233,22 @@ impl Config {
                 .as_deref()
                 .unwrap_or("~/.local/share/pandoc"),
         )
+    }
+
+    pub fn paths_mail(&self) -> Result<PathBuf, String> {
+        let raw = self
+            .paths
+            .mail
+            .as_deref()
+            .ok_or_else(|| "[paths] mail is required (the maildir root)".to_string())?;
+        Ok(expand_home(raw))
+    }
+
+    pub fn paths_snapshots(&self) -> Result<PathBuf, String> {
+        let raw = self.paths.snapshots.as_deref().ok_or_else(|| {
+            "[paths] snapshots is required (where decompiled notes live)".to_string()
+        })?;
+        Ok(expand_home(raw))
     }
 
     pub fn default_account(&self) -> Option<&str> {
@@ -312,6 +338,8 @@ lua-filters = ["email"]
         let cfg = Config::default();
         assert!(cfg.paths_source().is_err());
         assert!(cfg.paths_attachments().is_err());
+        assert!(cfg.paths_mail().is_err());
+        assert!(cfg.paths_snapshots().is_err());
         assert!(cfg.paths_pandoc_data().ends_with(".local/share/pandoc"));
     }
 

@@ -1,4 +1,5 @@
 mod config;
+mod decompile;
 mod frontmatter;
 mod list;
 mod maildir;
@@ -97,6 +98,17 @@ enum Command {
     Reconcile,
     /// List drafts with their status.
     List,
+    /// Decompile a message to a markdown snapshot note. Never sends.
+    Decompile {
+        /// Message-ID, a raw message file path, or `-` for stdin
+        input: String,
+        /// Print the note to stdout instead of writing to [paths] snapshots
+        #[arg(long)]
+        stdout: bool,
+        /// Append an `## Attachments` section listing extracted files
+        #[arg(long = "link-attachments")]
+        link_attachments: bool,
+    },
 }
 
 fn main() {
@@ -152,6 +164,11 @@ fn main() {
         } => write::write(stdout, folder, &draft, &cfg),
         Command::Reconcile => reconcile::reconcile(&cfg),
         Command::List => list::list(&cfg),
+        Command::Decompile {
+            input,
+            stdout,
+            link_attachments,
+        } => decompile::decompile(&input, stdout, link_attachments, &cfg),
     };
 
     if let Err(msg) = result {

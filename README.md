@@ -17,6 +17,9 @@ named folder, or an account's drafts maildir.
 - OpenPGP signing and encryption (PGP/MIME, RFC 3156) via gpg.
 - A message-id is assigned at `new` time and reused on every `write`, so
   recompiling is idempotent.
+- `decompile` turns a raw message back into a markdown snapshot note (the read
+  side): text/plain verbatim, or text/html via pandoc, with attachments
+  extracted.
 - Frontmatter is validated against a JSON Schema shipped with the binary.
 - Delivery is to stdout (`--stdout`), a `[folders]` entry (`--folder`), or the
   account's drafts maildir. Never to an SMTP server.
@@ -71,6 +74,18 @@ List drafts with their status (colour-coded):
 mdmc list
 ```
 
+Decompile a message to a markdown snapshot note — by Message-ID (scanned from
+the maildir tree), by file, or from stdin:
+
+```sh
+mdmc decompile 20260101.123456.abc@x1g11
+mdmc decompile ./raw.eml
+notmuch show --format=raw id:20260101.123456.abc@x1g11 | mdmc decompile -
+```
+
+`--stdout` prints the note instead of writing it to `paths.snapshots`, and
+`--link-attachments` appends an `## Attachments` section listing the extracted files.
+
 None of these commands send. Sending is left to the tool that owns the
 delivery maildir, or to an SMTP client that reads RFC 5322 from standard input.
 For example, pipe the compiled message straight into msmtp:
@@ -93,6 +108,8 @@ against the config file's directory.
 source = "~/mail/drafts"             # where markdown drafts live (required)
 attachments = "~/mail/attachments"   # bare-filename base for embeds and attachments (required)
 pandoc_data = "~/.local/share/pandoc"
+mail = "~/Mail"                      # maildir root for decompile Message-ID lookup
+snapshots = "~/mail/refs"            # where decompiled snapshot notes live
 
 [accounts.rmsams-gmail]
 from = "rmsams@gmail.com"
