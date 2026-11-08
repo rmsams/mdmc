@@ -7,9 +7,6 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
 - **Export the JSON Schema** — a CLI command (e.g. `mdmc schema mail-draft`) that
   prints a shipped schema to stdout, so external tools (`kb-validate`,
   note-typing) can consume it without reading the source tree.
-- **Rename `write` → `compile`** — `write` is ambiguous (it never writes a
-  message *out*, it compiles to RFC 5322 and delivers to a maildir); `compile`
-  pairs naturally with `decompile`.
 - **Batch decompile** — decompile every message in a maildir (or a set of
   Message-IDs), rather than one at a time. Kept notmuch-free by scanning the
   maildir tree.

@@ -1,3 +1,4 @@
+mod compile;
 mod config;
 mod decompile;
 mod frontmatter;
@@ -8,7 +9,6 @@ mod new;
 mod quote;
 mod reconcile;
 mod util;
-mod write;
 
 use std::path::PathBuf;
 
@@ -84,7 +84,7 @@ enum Command {
         editor: bool,
     },
     /// Compile a draft to a message (RFC 5322). Never sends.
-    Write {
+    Compile {
         /// Draft filename (slug) or path to compile
         draft: String,
         /// Print the compiled message to stdout instead of a maildir
@@ -94,10 +94,6 @@ enum Command {
         #[arg(long)]
         folder: Option<String>,
     },
-    /// Mark drafts sent when their message-id is in the account's sent maildir.
-    Reconcile,
-    /// List drafts with their status.
-    List,
     /// Decompile a message to a markdown snapshot note. Never sends.
     Decompile {
         /// Message-ID, a raw message file path, or `-` for stdin
@@ -109,6 +105,10 @@ enum Command {
         #[arg(long = "link-attachments")]
         link_attachments: bool,
     },
+    /// Mark drafts sent when their message-id is in the account's sent maildir.
+    Reconcile,
+    /// List drafts with their status.
+    List,
 }
 
 fn main() {
@@ -157,18 +157,18 @@ fn main() {
             encrypt,
             editor,
         ),
-        Command::Write {
+        Command::Compile {
             draft,
             stdout,
             folder,
-        } => write::write(stdout, folder, &draft, &cfg),
-        Command::Reconcile => reconcile::reconcile(&cfg),
-        Command::List => list::list(&cfg),
+        } => compile::compile(stdout, folder, &draft, &cfg),
         Command::Decompile {
             input,
             stdout,
             link_attachments,
         } => decompile::decompile(&input, stdout, link_attachments, &cfg),
+        Command::Reconcile => reconcile::reconcile(&cfg),
+        Command::List => list::list(&cfg),
     };
 
     if let Err(msg) = result {

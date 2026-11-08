@@ -1,8 +1,8 @@
 # Email RFCs
 
 A reference of the RFCs that govern email messages, and how mdmc handles each.
-The read side (`decompile`) parses with `mail-parser`; the write side
-(`new`/`write`) assembles with `mime-meta-language` (`mml`) and `mail-builder`.
+The decompile side (`decompile`) parses with `mail-parser`; the compile side
+(`new`/`compile`) assembles with `mime-meta-language` (`mml`) and `mail-builder`.
 
 ## Message format
 
@@ -11,8 +11,8 @@ The read side (`decompile`) parses with `mail-parser`; the write side
 The envelope: header fields plus a body of lines, CRLF-terminated. Defines
 `Message-ID`, `In-Reply-To`, `References`, `Date`, `From`/`To`/`Cc`.
 
-- **Write** emits RFC 5322 (via `mml` + `mail-builder`).
-- **Read** parses it (via `mail-parser`); the envelope becomes the snapshot
+- **Compile** emits RFC 5322 (via `mml` + `mail-builder`).
+- **Decompile** parses it (via `mail-parser`); the envelope becomes the snapshot
   frontmatter (`message-id`, `from`, `date`, `to`/`cc`, `in-reply-to`,
   `references`).
 
@@ -27,17 +27,17 @@ Transport only. Out of scope — mdmc never sends; delivery is to a maildir.
 Defines `Content-Type` and `Content-Transfer-Encoding` (7bit, 8bit, base64,
 quoted-printable).
 
-- **Write** selects a transfer encoding (via `mml`).
-- **Read** decodes it (`mail-parser` `decoded()` yields the raw bytes).
+- **Compile** selects a transfer encoding (via `mml`).
+- **Decompile** decodes it (`mail-parser` `decoded()` yields the raw bytes).
 
 ### RFC 2046 — MIME Part Two: Media Types
 
 Defines the multipart types (`mixed`, `alternative`, `related`, `digest`) and
 the `text/*` types.
 
-- **Write** builds `multipart/alternative` (text + html), `multipart/related`
+- **Compile** builds `multipart/alternative` (text + html), `multipart/related`
   (inline images), `multipart/mixed` (attachments).
-- **Read** walks the tree and collapses it to text body / html body /
+- **Decompile** walks the tree and collapses it to text body / html body /
   attachments (the RFC 8621 model). `text/plain` is preferred, else `text/html`
   is converted.
 
@@ -46,8 +46,8 @@ the `text/*` types.
 Encoded-words (`=?UTF-8?...?=`) for non-ASCII header text — subject lines and
 display names.
 
-- **Write** emits encoded-words (via `mml`).
-- **Read** decodes them (via `mail-parser`).
+- **Compile** emits encoded-words (via `mml`).
+- **Decompile** decodes them (via `mail-parser`).
 
 ### RFC 2049 — MIME Part Five: Conformance Criteria and Examples
 
@@ -59,8 +59,8 @@ Best-current-practice; nothing to implement.
 
 `attachment` vs `inline`, plus the `filename` parameter.
 
-- **Write** emits a disposition for attachments.
-- **Read** reads `filename` (`mail-parser` `attachment_name()`, which prefers
+- **Compile** emits a disposition for attachments.
+- **Decompile** reads `filename` (`mail-parser` `attachment_name()`, which prefers
   the disposition filename and falls back to the `Content-Type` `name`).
 
 ### RFC 2231 — MIME Parameter Value and Encoded Word Extensions
@@ -68,7 +68,7 @@ Best-current-practice; nothing to implement.
 How non-ASCII and over-long parameter values (notably filenames) are encoded
 (`filename*=UTF-8''…` and `parameter*N=` continuation).
 
-- **Read** decodes these (`mail-parser`). The decoded filename is honoured: it
+- **Decompile** decodes these (`mail-parser`). The decoded filename is honoured: it
   is sanitised to a single path component, prefixed with `<message-id>--`, and
   written to `[paths] attachments/`. The extension is just part of that string
   — it carries no semantic weight; the authoritative type is `Content-Type`,
@@ -80,8 +80,8 @@ How non-ASCII and over-long parameter values (notably filenames) are encoded
 
 Defines the `cid:` (and `mid:`) URI schemes.
 
-- **Write** emits `Content-ID` for inline images, referenced as `cid:`.
-- **Read** rewrites `cid:` image sources to the extracted files (a Lua filter
+- **Compile** emits `Content-ID` for inline images, referenced as `cid:`.
+- **Decompile** rewrites `cid:` image sources to the extracted files (a Lua filter
   walks the pandoc AST), yielding `![alt](<name>)`.
 
 ## Body formats
@@ -90,13 +90,13 @@ Defines the `cid:` (and `mid:`) URI schemes.
 
 Soft line-break markers that let clients reflow plain text.
 
-- **Read** renders it verbatim (no reflow); it degrades to plain text.
+- **Decompile** renders it verbatim (no reflow); it degrades to plain text.
 
 ### RFC 1896 — text/enriched (obsolete)
 
 An obsolete rich-text body format.
 
-- **Read** treats it as plain text (`mail-parser` classifies any `text/*`
+- **Decompile** treats it as plain text (`mail-parser` classifies any `text/*`
   except html as text), so it renders as a verbatim dump.
 
 ### RFC 5545 — iCalendar
@@ -117,8 +117,8 @@ direct handling; the concrete binding is RFC 3156.
 
 `multipart/signed` and `multipart/encrypted` for OpenPGP.
 
-- **Write** signs and/or encrypts via gpg.
-- **Read** is not implemented: the signature/ciphertext parts surface as
+- **Compile** signs and/or encrypts via gpg.
+- **Decompile** is not implemented: the signature/ciphertext parts surface as
   attachments; there is no verification or decryption.
 
 ## Conceptual model

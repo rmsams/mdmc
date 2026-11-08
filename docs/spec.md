@@ -7,7 +7,7 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 
 `mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
-shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
+shipped schema, and optionally opens `$EDITOR`. `mdmc compile` compiles a draft to
 RFC 5322 and delivers it. `mdmc reconcile` marks drafts `sent` once their
 message-id is in the account's sent maildir. `mdmc list` prints `status  slug`
 rows with the status colour-coded. `mdmc decompile` turns a raw message back
@@ -17,7 +17,7 @@ into a markdown snapshot note. None of them ever send.
 
 `mdmc decompile <input> [--stdout]` is the read side: it turns a raw RFC 5322
 message into a markdown snapshot note (a `mail-snapshot`). The inverse of
-`write`. It never sends.
+`compile`. It never sends.
 
 The `<input>` is disambiguated by shape: `-` reads a raw message from stdin; a
 path to an existing file reads that file as raw message; anything else is
@@ -72,16 +72,16 @@ account's `sent` maildir.
 ## Message-id semantics
 
 A draft's Message-ID is a random UUID v4 plus the local hostname, assigned once
-at `new` time and persisted in the draft's frontmatter. `write` reuses the
+at `new` time and persisted in the draft's frontmatter. `compile` reuses the
 persisted id (falling back to generating one only for drafts that lack it), so
 every delivery mode — `--stdout`, `--folder`, and the drafts maildir — emits the
 same Message-ID. Maildir delivery overwrites any existing message carrying the
-same Message-ID (scanning `new/` and `cur/` headers), so re-running `write` is
+same Message-ID (scanning `new/` and `cur/` headers), so re-running `compile` is
 idempotent and never leaves stale duplicate drafts.
 
 ## Compile pipeline
 
-`write <draft>`:
+`compile <draft>`:
 
 1. Load `config.toml` (paths, folders, accounts, defaults).
 2. Load the draft's `---` frontmatter (YAML) + body.
@@ -179,7 +179,7 @@ integration time.
 The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
 `schema/mail-draft.schema.json` and embedded in the binary via `include_str!`.
 `new` validates the frontmatter it builds against it (using the `jsonschema`
-crate) before writing, and `write` validates the frontmatter of the draft it
+crate) before writing, and `compile` validates the frontmatter of the draft it
 loads before compiling. There is no dependency on `~/kb` or the external
 `kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
 location is controlled by `paths.source` in config.
@@ -192,13 +192,13 @@ construction, so it does not validate; the schema is for external validation
 ## Module map
 
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
+- `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `quote.rs` — notmuch reply quoting.
 - `util.rs` — hostname and Message-ID generation.
-- `write.rs` — the `write` subcommand (compile + maildir delivery).
 
 ## MML crate
 

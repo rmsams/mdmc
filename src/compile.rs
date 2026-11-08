@@ -188,7 +188,7 @@ fn compile_message(
 /// Compile a draft to a message. With `--stdout`, print the RFC 5322
 /// message; with `--folder`, deliver to a `[folders]` target; otherwise
 /// deliver to the account's `drafts` maildir.
-pub fn write(
+pub fn compile(
     stdout: bool,
     folder: Option<String>,
     draft_arg: &str,

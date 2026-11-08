@@ -4,7 +4,7 @@ mdmc compiles markdown drafts into RFC 5322 email. It never sends.
 
 A draft is a markdown file with YAML frontmatter that holds the envelope
 (account, subject, recipients) and the message body below it. `mdmc new`
-creates the draft; `mdmc write` compiles it to MIME and delivers it to stdout, a
+creates the draft; `mdmc compile` compiles it to MIME and delivers it to stdout, a
 named folder, or an account's drafts maildir.
 
 ## Features
@@ -15,7 +15,7 @@ named folder, or an account's drafts maildir.
   email works without extra setup. Override them per draft or per config, or
   disable them with `pandoc-raw`.
 - OpenPGP signing and encryption (PGP/MIME, RFC 3156) via gpg.
-- A message-id is assigned at `new` time and reused on every `write`, so
+- A message-id is assigned at `new` time and reused on every `compile`, so
   recompiling is idempotent.
 - `decompile` turns a raw message back into a markdown snapshot note (the read
   side): text/plain verbatim, or text/html via pandoc, with attachments
@@ -53,13 +53,13 @@ mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format 
 Compile it and print to stdout:
 
 ```sh
-mdmc write hello --stdout
+mdmc compile hello --stdout
 ```
 
 Compile it and deliver it to the account's drafts maildir:
 
 ```sh
-mdmc write hello
+mdmc compile hello
 ```
 
 Mark drafts sent once their message-id is in the account's sent maildir:
@@ -91,10 +91,10 @@ delivery maildir, or to an SMTP client that reads RFC 5322 from standard input.
 For example, pipe the compiled message straight into msmtp:
 
 ```sh
-mdmc write hello --stdout | msmtp --read-envelope-from --read-recipients
+mdmc compile hello --stdout | msmtp --read-envelope-from --read-recipients
 ```
 
-Run `mdmc new --help` or `mdmc write --help` for the full option list.
+Run `mdmc new --help` or `mdmc compile --help` for the full option list.
 
 ## Configuration
 
