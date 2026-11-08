@@ -79,7 +79,7 @@ against the config file's directory.
 ```toml
 [paths]
 source = "~/mail/drafts"             # where markdown draft notes live
-attachments = "~/mail/attachments"   # where embedded images resolve
+attachments = "~/mail/attachments"   # bare-filename base for embeds and attachments
 pandoc_data = "~/.local/share/pandoc"
 
 [accounts.rmsams-gmail]
@@ -101,6 +101,10 @@ lua-filters = ["email"]              # names or paths
 
 An asset name without a `/` resolves under `pandoc_data` (filters, templates,
 and CSS themes). A value with a `/` is a path and is used directly.
+
+Embed and attachment references resolve by shape: a bare filename (`foo.png`)
+resolves under `paths.attachments`; a path with a `/` resolves relative to the
+note's directory; `~` resolves against home; an absolute path is used as-is.
 
 ## Draft note format
 

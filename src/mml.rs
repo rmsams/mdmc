@@ -90,20 +90,31 @@ pub fn escape_mml(text: &str) -> String {
     String::from_utf8(out).expect("valid utf-8")
 }
 
-fn resolve_embed(target: &str, attachments_dir: &Path) -> Option<PathBuf> {
+/// Resolve a file reference (an embed target or an `attachments` entry) to a
+/// path: `~` against HOME, an absolute path as-is, a relative path with a
+/// separator against the note's directory, and a bare filename against the
+/// attachments directory.
+pub fn resolve_reference(raw: &str, note_dir: &Path, attachments_dir: &Path) -> PathBuf {
+    let t = raw.trim();
+    if t.starts_with('~') {
+        return crate::config::expand_home(t);
+    }
+    let p = Path::new(t);
+    if p.is_absolute() {
+        PathBuf::from(t)
+    } else if t.contains('/') || t.contains('\\') {
+        note_dir.join(t)
+    } else {
+        attachments_dir.join(t)
+    }
+}
+
+fn resolve_embed(target: &str, note_dir: &Path, attachments_dir: &Path) -> Option<PathBuf> {
     let t = target.trim();
     if t.starts_with("http://") || t.starts_with("https://") || t.starts_with("data:") {
         return None;
     }
-    let p = if t.starts_with('~') {
-        crate::config::expand_home(t)
-    } else {
-        PathBuf::from(t)
-    };
-    if !p.is_absolute() && !t.contains('/') && !t.contains('\\') {
-        return Some(attachments_dir.join(t));
-    }
-    Some(p)
+    Some(resolve_reference(t, note_dir, attachments_dir))
 }
 
 fn is_image(path: &Path) -> bool {
@@ -256,6 +267,7 @@ pub fn build_mml_body(
     cfg: &Config,
     attachments: &[PathBuf],
     attachments_dir: &Path,
+    note_dir: &Path,
 ) -> Result<(String, Vec<String>), String> {
     let fmt = draft.format();
     let body = body.trim_end_matches('\n');
@@ -282,7 +294,7 @@ pub fn build_mml_body(
     for (start, end, target) in &matches {
         pieces.push(body[last..*start].to_string());
         last = *end;
-        match resolve_embed(target, attachments_dir) {
+        match resolve_embed(target, note_dir, attachments_dir) {
             Some(path) if path.is_file() && is_image(&path) => {
                 if fmt == "html" {
                     cid_n += 1;
@@ -558,5 +570,29 @@ mod tests {
     fn escape_mml_leaves_escaped_and_plain_text() {
         assert_eq!(escape_mml("already <#!part"), "already <#!part");
         assert_eq!(escape_mml("no directives"), "no directives");
+    }
+
+    #[test]
+    fn resolve_reference_routes_by_shape() {
+        let note = Path::new("/notes");
+        let attach = Path::new("/attachments");
+
+        assert_eq!(
+            resolve_reference("foo.png", note, attach),
+            Path::new("/attachments/foo.png")
+        );
+        assert_eq!(
+            resolve_reference("sub/foo.png", note, attach),
+            Path::new("/notes/sub/foo.png")
+        );
+        assert_eq!(
+            resolve_reference("/abs/foo.png", note, attach),
+            Path::new("/abs/foo.png")
+        );
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            resolve_reference("~/foo.png", note, attach),
+            PathBuf::from(format!("{home}/foo.png"))
+        );
     }
 }

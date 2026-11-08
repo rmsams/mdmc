@@ -362,8 +362,11 @@ from = "b@local"
         let dir = std::env::temp_dir().join(format!("mdmc-cfgdir-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".mdmc.toml");
-        std::fs::write(&path, "[paths]\nsource = \"source\"\nattachments = \"attachments\"\n")
-            .unwrap();
+        std::fs::write(
+            &path,
+            "[paths]\nsource = \"source\"\nattachments = \"attachments\"\n",
+        )
+        .unwrap();
         let cfg = Config::load(&path);
         std::fs::remove_dir_all(&dir).ok();
 

@@ -152,6 +152,7 @@ fn compile_message(
     body_text: &str,
     message_id: &str,
     attachments_dir: &Path,
+    note_dir: &Path,
     acct: &config::Account,
 ) -> Result<String, String> {
     let to = &fm.to.0;
@@ -164,12 +165,7 @@ fn compile_message(
 
     let mut attachment_paths: Vec<PathBuf> = Vec::new();
     for raw in &fm.attachments {
-        let p = config::expand_home(raw);
-        let p = if p.is_absolute() {
-            p
-        } else {
-            attachments_dir.join(p)
-        };
+        let p = mml::resolve_reference(raw, note_dir, attachments_dir);
         if p.exists() {
             attachment_paths.push(p);
         }
@@ -188,8 +184,14 @@ fn compile_message(
     headers.push(format!("Subject: {subject}"));
     headers.push(format!("Message-ID: <{message_id}>"));
 
-    let (mml_body, inline_cids) =
-        mml::build_mml_body(fm, body_text, cfg, &attachment_paths, attachments_dir)?;
+    let (mml_body, inline_cids) = mml::build_mml_body(
+        fm,
+        body_text,
+        cfg,
+        &attachment_paths,
+        attachments_dir,
+        note_dir,
+    )?;
     let mml_source = format!("{}\n\n{mml_body}\n", headers.join("\n"));
 
     let sign_key = if fm.sign.unwrap_or(false) {
@@ -307,7 +309,16 @@ pub fn write(
         }
     }
 
-    let message = compile_message(cfg, &fm, &body_text, &message_id, &attachments_dir, acct)?;
+    let note_dir = arg.parent().unwrap_or_else(|| Path::new("."));
+    let message = compile_message(
+        cfg,
+        &fm,
+        &body_text,
+        &message_id,
+        &attachments_dir,
+        note_dir,
+        acct,
+    )?;
 
     if stdout {
         std::io::stdout()

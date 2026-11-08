@@ -43,7 +43,7 @@ idempotent and never leaves stale duplicate drafts.
 ```toml
 [paths]
 source = "~/kb/ops/mail/drafts"      # markdown draft-note directory
-attachments = "~/kb/attachments"
+attachments = "~/kb/attachments"     # bare-filename base for embeds and attachments
 pandoc_data = "~/.local/share/pandoc"
 
 [accounts.rmsams-gmail]
@@ -72,6 +72,10 @@ Relative paths in a config file resolve against that file's directory, so a repo
 can use `source = "drafts"`. mdmc does not read neomutt config. Bare delivery
 paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
 backend lands.
+
+Embed and `attachments` references resolve by shape: a bare filename under
+`paths.attachments`, a path with a separator relative to the note's directory,
+`~` against home, and an absolute path as-is.
 
 ## Pandoc defaults
 
