@@ -49,7 +49,20 @@
     "attachments": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "required": [
+          "file",
+          "content-type"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content-type": {
+            "type": "string"
+          }
+        }
       }
     },
     "tags": {

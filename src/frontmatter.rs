@@ -157,11 +157,13 @@ fn closing_line_index(text: &str) -> Option<usize> {
     None
 }
 
-/// A single frontmatter field value: a scalar, a list of scalars, or a boolean.
+/// A single frontmatter field value: a scalar, a list of scalars, a boolean,
+/// or a list of key/value objects (each an ordered pair list).
 pub enum Field {
     Str(String),
     List(Vec<String>),
     Bool(bool),
+    ObjectList(Vec<Vec<(String, String)>>),
 }
 
 /// Validate a frontmatter instance against the embedded `mail-draft` schema.
@@ -189,6 +191,18 @@ pub fn to_json(fields: &[(String, Field)]) -> serde_json::Value {
                     .map(|s| serde_json::Value::String(s.clone()))
                     .collect(),
             ),
+            Field::ObjectList(items) => serde_json::Value::Array(
+                items
+                    .iter()
+                    .map(|obj| {
+                        let mut m = serde_json::Map::new();
+                        for (k, v) in obj {
+                            m.insert(k.clone(), serde_json::Value::String(v.clone()));
+                        }
+                        serde_json::Value::Object(m)
+                    })
+                    .collect(),
+            ),
             Field::Bool(b) => serde_json::Value::Bool(*b),
         };
         map.insert(key.clone(), v);
@@ -209,6 +223,18 @@ pub fn render_note(fields: &[(String, Field)], body_text: &str) -> String {
                 yaml.push_str(&format!("{key}:\n"));
                 for item in items {
                     yaml.push_str(&format!("  - {}\n", scalar(item)));
+                }
+            }
+            Field::ObjectList(items) => {
+                yaml.push_str(&format!("{key}:\n"));
+                for item in items {
+                    for (i, (k, v)) in item.iter().enumerate() {
+                        if i == 0 {
+                            yaml.push_str(&format!("  - {k}: {}\n", scalar(v)));
+                        } else {
+                            yaml.push_str(&format!("    {k}: {}\n", scalar(v)));
+                        }
+                    }
                 }
             }
             Field::Bool(b) => {
@@ -348,5 +374,21 @@ mod tests {
     fn validate_accepts_quote_none() {
         let json = serde_json::json!({"title": "T", "type": "mail-draft", "quote": "none"});
         assert!(validate(&json).is_ok());
+    }
+
+    #[test]
+    fn render_note_object_list_formats_entries() {
+        let fields = vec![(
+            "attachments".to_string(),
+            Field::ObjectList(vec![vec![
+                ("file".to_string(), "m1@x--a.pdf".to_string()),
+                ("content-type".to_string(), "application/pdf".to_string()),
+            ]]),
+        )];
+        let note = render_note(&fields, "body");
+        assert_eq!(
+            note,
+            "---\nattachments:\n  - file: m1@x--a.pdf\n    content-type: application/pdf\n---\n\nbody\n"
+        );
     }
 }

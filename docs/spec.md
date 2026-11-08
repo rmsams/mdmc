@@ -35,9 +35,9 @@ Message-ID whose snapshot already exists is skipped.
 The frontmatter carries the envelope: `title` (the Subject, falling back to
 `(no subject)`), `type` (`mail-snapshot`), `message-id` (the raw id, the key),
 `from`, `date` (RFC 3339), and optional `to`/`cc` (address arrays),
-`in-reply-to`, `references`, `attachments`. The body is the converted message;
-`--link-attachments` additionally appends an `## Attachments` section listing
-the discrete attachment files.
+`in-reply-to`, `references`, `attachments` (an array of `{ file, content-type }`
+objects). The body is the converted message; `--link-attachments` additionally
+appends an `## Attachments` section listing the discrete attachment files.
 
 ### Conversion
 
@@ -57,8 +57,9 @@ Discrete attachments and inline `cid:` images are extracted to
 `[paths] attachments/<message-id>--<name>` (the name sanitised to a single path
 component). Inline images are embedded in the body (see Conversion) and are not
 re-listed; discrete attachments appear in the `## Attachments` section only
-under `--link-attachments`. The frontmatter `attachments` field always lists every
-extracted file. A tracking-pixel filter is deferred.
+under `--link-attachments`. The frontmatter `attachments` field always lists
+every extracted file as `{ file, content-type }` — the MIME `Content-Type` is
+preserved, not just the filename. A tracking-pixel filter is deferred.
 
 ## Status lifecycle
 

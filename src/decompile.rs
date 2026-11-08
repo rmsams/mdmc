@@ -9,10 +9,11 @@ use mail_parser::{AddressList, Mailbox, Message, MessageParser, MessagePart, Par
 use crate::config::Config;
 use crate::frontmatter::{self, Field};
 
-/// An attachment: the display name, the bytes as written to disk, and the
-/// `Content-ID` when it is an inline `cid:` part.
+/// An attachment: the display name, the MIME content type, the bytes as
+/// written to disk, and the `Content-ID` when it is an inline `cid:` part.
 struct Attachment {
     name: String,
+    content_type: String,
     bytes: Vec<u8>,
     content_id: Option<String>,
 }
@@ -56,13 +57,13 @@ pub fn decompile(
         inline.iter().chain(discrete.iter()).collect()
     };
 
-    let all_disk: Vec<String> = inline
+    let all_attachments: Vec<(String, String)> = inline
         .iter()
         .chain(discrete.iter())
-        .map(|a| disk_name(&message_id, &a.name))
+        .map(|a| (disk_name(&message_id, &a.name), a.content_type.clone()))
         .collect();
 
-    let fields = build_fields(&message, &message_id, &all_disk);
+    let fields = build_fields(&message, &message_id, &all_attachments);
     let mut body_text = body;
     if list_attachments && !listed.is_empty() {
         body_text.push_str("\n## Attachments\n\n");
@@ -261,6 +262,7 @@ fn split_attachments(message: &Message) -> (Vec<Attachment>, Vec<Attachment>) {
         };
         let att = Attachment {
             name,
+            content_type: part_content_type(&part),
             bytes: part.decoded().into_owned(),
             content_id: part.content_id().map(str::to_string),
         };
@@ -271,6 +273,17 @@ fn split_attachments(message: &Message) -> (Vec<Attachment>, Vec<Attachment>) {
         }
     }
     (inline, discrete)
+}
+
+/// The part's `type/subtype`, defaulting to `application/octet-stream` when it
+/// declares no `Content-Type`.
+fn part_content_type(part: &MessagePart) -> String {
+    part.content_type()
+        .map(|ct| match ct.subtype() {
+            Some(sub) => format!("{}/{}", ct.ctype(), sub),
+            None => ct.ctype().to_string(),
+        })
+        .unwrap_or_else(|| "application/octet-stream".to_string())
 }
 
 /// A display name for a part: its attachment filename, else a name derived from
@@ -300,7 +313,7 @@ fn disk_name(message_id: &str, name: &str) -> String {
 fn build_fields(
     message: &Message,
     message_id: &str,
-    disk_names: &[String],
+    attachments: &[(String, String)],
 ) -> Vec<(String, Field)> {
     let mut fields: Vec<(String, Field)> = Vec::new();
     let subject = message
@@ -335,8 +348,17 @@ fn build_fields(
             Field::List(references.iter().map(str::to_string).collect()),
         ));
     }
-    if !disk_names.is_empty() {
-        fields.push(("attachments".to_string(), Field::List(disk_names.to_vec())));
+    if !attachments.is_empty() {
+        let objects: Vec<Vec<(String, String)>> = attachments
+            .iter()
+            .map(|(file, content_type)| {
+                vec![
+                    ("file".to_string(), file.clone()),
+                    ("content-type".to_string(), content_type.clone()),
+                ]
+            })
+            .collect();
+        fields.push(("attachments".to_string(), Field::ObjectList(objects)));
     }
     fields
 }
@@ -558,7 +580,9 @@ mod tests {
         assert!(note.contains("message-id: m1@example.com\n"));
         assert!(note.contains("from: Ann <ann@example.com>\n"));
         assert!(note.contains("to:\n  - bob@example.com\n"));
-        assert!(note.contains("attachments:\n  - m1@example.com--report.pdf\n"));
+        assert!(note.contains(
+            "attachments:\n  - file: m1@example.com--report.pdf\n    content-type: application/pdf\n"
+        ));
         assert!(note.contains("Hello body."));
         assert!(note.contains("## Attachments"));
         assert!(note.contains("[report.pdf](m1@example.com--report.pdf)"));
@@ -579,7 +603,9 @@ mod tests {
 
         let note = std::fs::read_to_string(snapshots.join("m1@example.com.md")).unwrap();
         assert!(!note.contains("## Attachments"));
-        assert!(note.contains("attachments:\n  - m1@example.com--report.pdf\n"));
+        assert!(note.contains(
+            "attachments:\n  - file: m1@example.com--report.pdf\n    content-type: application/pdf\n"
+        ));
         std::fs::remove_dir_all(&dir).ok();
     }
 
