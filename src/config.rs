@@ -98,7 +98,7 @@ pub struct Config {
 
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct Paths {
-    pub drafts: Option<String>,
+    pub source: Option<String>,
     pub attachments: Option<String>,
     pub pandoc_data: Option<String>,
 }
@@ -156,7 +156,7 @@ impl Config {
     /// Resolve all path-valued fields against `base`, so the config holds
     /// absolute paths after loading.
     fn resolve_paths(&mut self, base: &Path) {
-        if let Some(p) = &mut self.paths.drafts {
+        if let Some(p) = &mut self.paths.source {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
         if let Some(p) = &mut self.paths.attachments {
@@ -180,7 +180,7 @@ impl Config {
     pub fn merge(local: Config, global: Config) -> Config {
         Config {
             paths: Paths {
-                drafts: local.paths.drafts.or(global.paths.drafts),
+                source: local.paths.source.or(global.paths.source),
                 attachments: local.paths.attachments.or(global.paths.attachments),
                 pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
             },
@@ -195,10 +195,10 @@ impl Config {
         }
     }
 
-    pub fn paths_drafts(&self) -> PathBuf {
+    pub fn paths_source(&self) -> PathBuf {
         expand_home(
             self.paths
-                .drafts
+                .source
                 .as_deref()
                 .unwrap_or("~/kb/ops/mail/drafts"),
         )
@@ -362,12 +362,12 @@ from = "b@local"
         let dir = std::env::temp_dir().join(format!("mdmc-cfgdir-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".mdmc.toml");
-        std::fs::write(&path, "[paths]\ndrafts = \"drafts\"\nattachments = \"attachments\"\n")
+        std::fs::write(&path, "[paths]\nsource = \"source\"\nattachments = \"attachments\"\n")
             .unwrap();
         let cfg = Config::load(&path);
         std::fs::remove_dir_all(&dir).ok();
 
-        assert_eq!(cfg.paths_drafts(), dir.join("drafts"));
+        assert_eq!(cfg.paths_source(), dir.join("source"));
         assert_eq!(cfg.paths_attachments(), dir.join("attachments"));
     }
 }

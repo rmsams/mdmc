@@ -238,7 +238,7 @@ pub fn write(
         return Err("--stdout and --folder are mutually exclusive.".into());
     }
 
-    let drafts_dir = cfg.paths_drafts();
+    let drafts_dir = cfg.paths_source();
     let attachments_dir = cfg.paths_attachments();
 
     let mut arg = config::expand_home(draft_arg);

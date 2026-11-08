@@ -78,7 +78,7 @@ against the config file's directory.
 
 ```toml
 [paths]
-drafts = "~/mail/drafts"             # where draft notes live
+source = "~/mail/drafts"             # where markdown draft notes live
 attachments = "~/mail/attachments"   # where embedded images resolve
 pandoc_data = "~/.local/share/pandoc"
 

@@ -6,7 +6,7 @@ tool. It compiles markdown draft notes to RFC 5322 email and never sends.
 ## Commands
 
 `mdmc new` creates a draft note (frontmatter + markdown body) under
-`paths.drafts`, assigns its `message-id`, validates its frontmatter against the
+`paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. `mdmc write` compiles a draft to
 RFC 5322 and delivers it. Neither ever sends.
 
@@ -42,7 +42,7 @@ idempotent and never leaves stale duplicate drafts.
 
 ```toml
 [paths]
-drafts = "~/kb/ops/mail/drafts"      # draft note directory
+source = "~/kb/ops/mail/drafts"      # markdown draft-note directory
 attachments = "~/kb/attachments"
 pandoc_data = "~/.local/share/pandoc"
 
@@ -69,7 +69,7 @@ mdmc resolves its config in this order:
 A local `.mdmc.toml` is merged over the global config: local fields take
 precedence, and the `accounts`/`folders` maps are a union with local precedence.
 Relative paths in a config file resolve against that file's directory, so a repo
-can use `drafts = "drafts"`. mdmc does not read neomutt config. Bare delivery
+can use `source = "drafts"`. mdmc does not read neomutt config. Bare delivery
 paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
 backend lands.
 
@@ -112,7 +112,7 @@ The `mail-draft` frontmatter JSON Schema (draft 2020-12) is shipped at
 crate) before writing, and `write` validates the frontmatter of the note it
 loads before compiling. There is no dependency on `~/kb` or the external
 `kb-validate` tool. The kb-specific `paths` allow-list is not enforced — draft
-location is controlled by `paths.drafts` in config.
+location is controlled by `paths.source` in config.
 
 ## Module map
 
