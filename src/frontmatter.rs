@@ -343,4 +343,10 @@ mod tests {
         let json = serde_json::json!({"title": "T", "type": "mail-draft", "format": "bogus"});
         assert!(validate(&json).is_err());
     }
+
+    #[test]
+    fn validate_accepts_quote_none() {
+        let json = serde_json::json!({"title": "T", "type": "mail-draft", "quote": "none"});
+        assert!(validate(&json).is_ok());
+    }
 }
