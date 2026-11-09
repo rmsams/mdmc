@@ -5,13 +5,13 @@ use mail_parser::MessageParser;
 use crate::addr::format_mailbox;
 
 /// Build the reply quote for a message-id, or an empty string when the
-/// message cannot be found. The message is resolved by scanning the maildir
-/// tree under `mail_root` (notmuch is not required).
+/// message cannot be found. The message is resolved by a notmuch `mid:` lookup
+/// with a maildir-scan fallback.
 pub fn build_quote(in_reply_to: &str, mail_root: Option<&Path>) -> String {
     let Some(root) = mail_root else {
         return String::new();
     };
-    let Some(path) = crate::maildir::find_message_in_tree(root, in_reply_to) else {
+    let Some(path) = crate::notmuch::resolve(in_reply_to, Some(root)) else {
         return String::new();
     };
     let Ok(raw) = std::fs::read(path) else {

@@ -19,7 +19,11 @@ opens a multi-select picker that prints the chosen paths. `mdmc decompile` turns
 a raw message back into a markdown snapshot note. `mdmc view` prints a message
 as markdown to stdout with no attachment extraction and no `cid:` rewriting:
 by default a full snapshot note (frontmatter + body), or, with `--body-only`,
-just a subject/meta header + body — a terminal-reader mode. `mdmc config` prints the
+just a subject/meta header + body — a terminal-reader mode. `mdmc decompile`
+and `mdmc view` both take an optional input and open the message picker on a
+terminal when it is omitted. `mdmc index` builds the lookup index; `mdmc addr`
+and `mdmc mid` pick an address or message-id from it (see Lookup index).
+`mdmc config` prints the
 effective (merged, resolved) config as TOML. None of them ever send.
 
 ## Decompile
@@ -30,9 +34,9 @@ message into a markdown snapshot note (a `mail-snapshot`). The inverse of
 
 The `<input>` is disambiguated by shape: `-` reads a raw message from stdin; a
 path to an existing file reads that file as raw message; anything else is
-treated as a Message-ID, resolved by scanning the maildir tree under
-`[paths] mail` (reusing `maildir::read_message_id`, which reads only the header
-prefix). Notmuch is not required.
+treated as a Message-ID, resolved via notmuch's `mid:` term with a maildir-scan
+fallback (see Message-id resolution). With no `<input>`, an interactive
+message-id picker runs on a terminal (a hard error on a non-terminal).
 
 The snapshot note lives at `[paths] snapshots/<slug>.md`, where `slug` is a
 filesystem-safe form of the message's Message-ID (identity for
@@ -89,10 +93,18 @@ same Message-ID. Maildir delivery overwrites any existing message carrying the
 same Message-ID (scanning `new/` and `cur/` headers), so re-running `compile` is
 idempotent and never leaves stale duplicate drafts.
 
+## Message-id resolution
+
+A Message-ID resolves to a file path via notmuch's `mid:` term
+(`notmuch search --output=files --limit=1 mid:<id>`), falling back to a full
+maildir scan when notmuch has no answer. This is the fast path for
+`decompile`, `view`, `reply`, and the reply-quote builder. The `mid:` term is
+angle-bracket-insensitive, matching mdmc's bracket-stripped ids.
+
 ## Reply
 
-`mdmc new --in-reply-to <id>` resolves the original message by the same maildir
-scan `decompile` uses (a missing `paths.mail`, a Message-ID that cannot be
+`mdmc new --in-reply-to <id>` resolves the original message by the same lookup
+`decompile` uses (a missing `paths.mail`, a Message-ID that cannot be
 found, or an unparseable message is a hard error) and auto-fills the envelope.
 
 The sender is the first `Reply-To` mailbox, falling back to the first `From`
@@ -103,6 +115,31 @@ The subject is prefixed with `Re: ` unless it already has the prefix. Explicit
 `--to`/`--cc`/`--subject` flags override the auto-filled values. The
 `in-reply-to` and `quote: auto` fields are always written.
 
+## Lookup index
+
+`mdmc index` builds a local SQLite index (at `$XDG_DATA_HOME/mdmc/index.db`) of
+message metadata scoped by the `[index] query` notmuch query: for each file
+matching the query it reads only the header block and stores the message-id,
+`From` name/address, subject, date, and path. It is a manual, periodic batch —
+rebuild with `mdmc index` after syncing.
+
+`mdmc addr` and `mdmc mid` query this index (never notmuch, so the slow
+address enumeration is off the interactive path):
+
+- `mdmc addr [--last N] [--print] [--multi] [--json]` picks an address and
+  prints `Name <email>`; addresses are deduplicated by address, most recent
+  first.
+- `mdmc mid [--from A] [--last N] [--print] [--multi] [--json]` picks a
+  message (displayed as `sender — subject`) and prints its message-id.
+- `--last N` bounds by recency (default 30 days; `0` lifts the bound); `--from`
+  is a case-insensitive substring on the sender's name or address. `--print`
+  dumps every match instead of opening a picker; `--json` emits a JSON array
+  (and implies no picker); `--multi` allows multiple selections. Missing index
+  is a hard error ("run `mdmc index` first").
+
+`mdmc view` and `mdmc decompile` with no input open the message picker on a
+terminal, so `mdmc view $(mdmc mid)` can be shortened to `mdmc view`.
+
 ## Compile pipeline
 
 `compile <draft>`:
@@ -111,8 +148,8 @@ The subject is prefixed with `Re: ` unless it already has the prefix. Explicit
 2. Load the draft's `---` frontmatter (YAML) + body.
 3. Resolve the account's `from`/`realname` from `[accounts.<name>]`.
 4. Reuse the draft's `message-id` (or generate one for legacy drafts).
-5. Optionally append a reply quote (resolved by the same maildir scan
-   `decompile` uses, then parsed with `mail-parser`).
+5. Optionally append a reply quote (resolved by the same lookup `decompile`
+   uses, then parsed with `mail-parser`).
 6. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
    with `![[…]]` image embeds becoming inline `cid:` parts.
 7. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
@@ -140,6 +177,9 @@ sent = "~/Mail/rmsams-gmail.com/[Google Mail].Sent Mail"  # sent maildir
 
 [folders]
 refs = "~/Mail/rmsams-gmail.com/Reference"
+
+[index]
+query = "path:rmsams-gmail.com/** or path:rs-clearmatics.com/** or path:services/**"  # notmuch scope for `mdmc index`
 
 [defaults]
 css = "email"
@@ -231,15 +271,18 @@ construction, so it does not validate; the schema is for external validation
 ## Module map
 
 - `addr.rs` — mailbox/address-list formatting helpers.
-- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
+- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[index]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
 - `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
+- `index.rs` — the SQLite lookup index (build + query).
+- `lookup.rs` — the `addr`/`mid` pickers and the `view`/`decompile` omit-input picker.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
-- `maildir.rs` — Message-ID lookup by scanning maildirs (parallel, header-prefix reads).
-- `quote.rs` — reply quoting (maildir scan + `mail-parser`).
+- `maildir.rs` — maildir delivery/dedup helpers and the Message-ID scan fallback.
+- `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve, scoped file listing).
+- `quote.rs` — reply quoting (notmuch resolve + `mail-parser`).
 - `reply.rs` — reply envelope resolution (recipients + subject).
 - `util.rs` — hostname and Message-ID generation.
 - `view.rs` — the `view` subcommand (markdown rendering to stdout).

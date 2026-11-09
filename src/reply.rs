@@ -11,7 +11,7 @@ pub fn resolve(in_reply_to: &str, mail_root: &Path) -> Result<Message<'static>, 
         .trim()
         .trim_start_matches('<')
         .trim_end_matches('>');
-    let path = crate::maildir::find_message_in_tree(mail_root, id)
+    let path = crate::notmuch::resolve(id, Some(mail_root))
         .ok_or_else(|| format!("message-id '{id}' not found under {}", mail_root.display()))?;
     let raw = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     MessageParser::new()

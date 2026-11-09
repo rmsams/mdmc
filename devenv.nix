@@ -8,6 +8,7 @@
 
   packages = [
     pkgs.pandoc
+    pkgs.notmuch
   ];
 
   scripts.mdmc.exec = "cargo run -- \"$@\"";

@@ -11,8 +11,8 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   merged, resolved config (after local/global merge, `~` expansion, and path
   resolution), to debug path/editor/account resolution.
 - **Batch decompile** — decompile every message in a maildir (or a set of
-  Message-IDs), rather than one at a time. Kept notmuch-free by scanning the
-  maildir tree.
+  Message-IDs), rather than one at a time. The index built by `mdmc index`
+  could drive this.
 - **Tracking-pixel filter** — drop 1×1 images and known tracker domains when
   extracting attachments (deferred from the read-side design).
 - **Forwarded messages** — a nested `message/rfc822` part renders as nothing:
@@ -20,8 +20,6 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   walking the nested message's body.
 - **Quote collapsing** — long reply chains render as a wall of `>` lines; an
   option to trim or collapse quoted context would improve readability.
-- **Maildir scan cache** — `find_message_in_tree` walks the whole mail tree per
-  Message-ID; a cached id→file map would matter once decompile runs in bulk.
 
 ## Open questions
 

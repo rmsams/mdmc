@@ -4,16 +4,20 @@ mod config;
 mod decompile;
 mod edit;
 mod frontmatter;
+mod index;
 mod list;
+mod lookup;
 mod maildir;
 mod mml;
 mod new;
+mod notmuch;
 mod quote;
 mod reconcile;
 mod reply;
 mod util;
 mod view;
 
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -117,8 +121,8 @@ enum Command {
     },
     /// Decompile a message to a markdown snapshot note. Never sends.
     Decompile {
-        /// Message-ID, a raw message file path, or `-` for stdin
-        input: String,
+        /// Message-ID, a raw message file path, or `-` for stdin; omit for a picker
+        input: Option<String>,
         /// Print the note to stdout instead of writing to [paths] snapshots
         #[arg(long)]
         stdout: bool,
@@ -144,11 +148,46 @@ enum Command {
     Config,
     /// Print a message as markdown to stdout (no attachment extraction). Never sends.
     View {
-        /// Message-ID, a raw message file path, or `-` for stdin
-        input: String,
+        /// Message-ID, a raw message file path, or `-` for stdin; omit for a picker
+        input: Option<String>,
         /// Print only a header + body, omitting the frontmatter
         #[arg(long)]
         body_only: bool,
+    },
+    /// Build (or rebuild) the lookup index from notmuch. Never sends.
+    Index,
+    /// Pick an address (`Name <email>`) from the index and print it. Never sends.
+    Addr {
+        /// Only consider addresses seen in the last N days (0 = no bound)
+        #[arg(long)]
+        last: Option<u32>,
+        /// Print every match instead of opening a picker
+        #[arg(long)]
+        print: bool,
+        /// Allow selecting multiple addresses
+        #[arg(long)]
+        multi: bool,
+        /// Print a JSON array instead of plain values (implies no picker)
+        #[arg(long)]
+        json: bool,
+    },
+    /// Pick a message-id from the index and print it. Never sends.
+    Mid {
+        /// Restrict to messages whose sender matches this substring
+        #[arg(long)]
+        from: Option<String>,
+        /// Only consider messages from the last N days (0 = no bound)
+        #[arg(long)]
+        last: Option<u32>,
+        /// Print every match instead of opening a picker
+        #[arg(long)]
+        print: bool,
+        /// Allow selecting multiple messages
+        #[arg(long)]
+        multi: bool,
+        /// Print a JSON array instead of plain values (implies no picker)
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -161,7 +200,14 @@ fn main() {
     let cli = Cli::parse();
     let cfg = config::discover(cli.config);
 
-    let result = match cli.command {
+    if let Err(msg) = run(cli.command, &cfg) {
+        eprintln!("Error: {msg}");
+        std::process::exit(1);
+    }
+}
+
+fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
+    match command {
         Command::New {
             account,
             to,
@@ -181,7 +227,7 @@ fn main() {
             encrypt,
             editor,
         } => new::new(
-            &cfg,
+            cfg,
             account,
             to,
             cc,
@@ -201,31 +247,61 @@ fn main() {
             editor,
         ),
         Command::Edit { input, editor, all } => {
-            edit::edit(input.as_deref(), editor.as_deref(), all, &cfg)
+            edit::edit(input.as_deref(), editor.as_deref(), all, cfg)
         }
         Command::Compile {
             draft,
             stdout,
             folder,
             again,
-        } => compile::compile(stdout, folder, again, &draft, &cfg),
+        } => compile::compile(stdout, folder, again, &draft, cfg),
         Command::Decompile {
             input,
             stdout,
             link_attachments,
-        } => decompile::decompile(&input, stdout, link_attachments, &cfg),
-        Command::Reconcile => reconcile::reconcile(&cfg),
+        } => decompile::decompile(&mid_arg(input, cfg)?, stdout, link_attachments, cfg),
+        Command::Reconcile => reconcile::reconcile(cfg),
         Command::List {
             snapshots,
             paths,
             pick,
-        } => list::list(snapshots, paths, pick, &cfg),
+        } => list::list(snapshots, paths, pick, cfg),
         Command::Config => cfg.to_toml().map(|s| println!("{s}")),
-        Command::View { input, body_only } => view::view(&input, body_only, &cfg),
-    };
+        Command::View { input, body_only } => view::view(&mid_arg(input, cfg)?, body_only, cfg),
+        Command::Index => {
+            let query = cfg.index_query()?;
+            let db = crate::index::db_path();
+            let n = crate::index::build(query, &db)?;
+            println!("indexed {n} messages in {}", db.display());
+            Ok(())
+        }
+        Command::Addr {
+            last,
+            print,
+            multi,
+            json,
+        } => lookup::addr(last.unwrap_or(30), print, multi, json, cfg),
+        Command::Mid {
+            from,
+            last,
+            print,
+            multi,
+            json,
+        } => lookup::mid(from.as_deref(), last.unwrap_or(30), print, multi, json, cfg),
+    }
+}
 
-    if let Err(msg) = result {
-        eprintln!("Error: {msg}");
-        std::process::exit(1);
+/// Resolve an optional `view`/`decompile` input: an explicit value passes
+/// through; when omitted on a terminal, an interactive message-id picker runs;
+/// when omitted on a non-terminal, an error is returned.
+fn mid_arg(input: Option<String>, cfg: &config::Config) -> Result<String, String> {
+    match input {
+        Some(value) => Ok(value),
+        None => {
+            if !std::io::stdin().is_terminal() {
+                return Err("no input (omit for an interactive picker on a terminal)".to_string());
+            }
+            lookup::pick_message_id(None, 30, cfg)
+        }
     }
 }

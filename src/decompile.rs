@@ -119,7 +119,7 @@ pub(crate) fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String
     }
     let id = input.trim().trim_start_matches('<').trim_end_matches('>');
     let root = cfg.paths_mail()?;
-    let path = crate::maildir::find_message_in_tree(&root, id)
+    let path = crate::notmuch::resolve(id, Some(&root))
         .ok_or_else(|| format!("message-id '{id}' not found under {}", root.display()))?;
     std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))
 }

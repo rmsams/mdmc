@@ -96,6 +96,21 @@ pub struct Config {
     pub accounts: BTreeMap<String, Account>,
     #[serde(default)]
     pub editors: Vec<Editor>,
+    #[serde(default, skip_serializing_if = "Index::is_empty")]
+    pub index: Index,
+}
+
+/// The lookup-index section: the notmuch query scoping which folders are
+/// indexed by `mdmc index`.
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct Index {
+    pub query: Option<String>,
+}
+
+impl Index {
+    fn is_empty(&self) -> bool {
+        self.query.is_none()
+    }
 }
 
 /// A named editor command string (program + args), e.g. `emacsclient -t`.
@@ -220,6 +235,9 @@ impl Config {
             } else {
                 local.editors
             },
+            index: Index {
+                query: local.index.query.or(global.index.query),
+            },
         }
     }
 
@@ -263,6 +281,13 @@ impl Config {
             "[paths] snapshots is required (where decompiled notes live)".to_string()
         })?;
         Ok(expand_home(raw))
+    }
+
+    /// The notmuch query scoping the lookup index (required by `mdmc index`).
+    pub fn index_query(&self) -> Result<&str, String> {
+        self.index.query.as_deref().ok_or_else(|| {
+            "[index] query is required (the notmuch query scoping the index)".to_string()
+        })
     }
 
     pub fn default_account(&self) -> Option<&str> {
