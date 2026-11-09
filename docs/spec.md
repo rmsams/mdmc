@@ -208,7 +208,7 @@ mdmc resolves its config in this order:
 
 1. `--config PATH` (explicit override).
 2. A `.mdmc.toml` found in the current directory or any parent (per-repo config).
-3. `~/.config/mail/config.toml`.
+3. `~/.config/mdmc/config.toml`.
 
 A local `.mdmc.toml` is merged over the global config: local fields take
 precedence, and the `accounts`/`folders` maps are a union with local precedence.

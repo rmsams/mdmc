@@ -37,7 +37,7 @@ nix build
 ```
 
 For development, use devenv. The shell is wired to a purely local environment —
-it never touches `~/.config/mail` or `~/Mail`. `dev-setup` copies the committed
+it never touches `~/.config/mdmc` or `~/Mail`. `dev-setup` copies the committed
 `dev/` fixtures (a fake maildir, a sample draft, and a config) into `.dev-state/`
 (a git-ignored working copy), then indexes them with notmuch and mdmc, so tests
 mutate the copy, not the committed assets:
@@ -168,7 +168,7 @@ Run `mdmc new --help` or `mdmc compile --help` for the full option list.
 ## Configuration
 
 mdmc reads its config from `--config PATH`, or a `.mdmc.toml` in the current
-directory (or any parent), or `~/.config/mail/config.toml` as a fallback. A
+directory (or any parent), or `~/.config/mdmc/config.toml` as a fallback. A
 local `.mdmc.toml` merges over the global one, and relative paths resolve
 against the config file's directory.
 

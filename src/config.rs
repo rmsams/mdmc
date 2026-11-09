@@ -42,12 +42,12 @@ fn merge_map<K: Ord, V>(local: BTreeMap<K, V>, global: BTreeMap<K, V>) -> BTreeM
 
 /// Discover the effective config: an explicit `--config` path wins; otherwise a
 /// local `.mdmc.toml` (found by walking up from the current directory) is
-/// merged over the global `~/.config/mail/config.toml`.
+/// merged over the global `~/.config/mdmc/config.toml`.
 pub fn discover(flag: Option<PathBuf>) -> Config {
     if let Some(path) = flag {
         return Config::load(&path);
     }
-    let global = Config::load(&expand_home("~/.config/mail/config.toml"));
+    let global = Config::load(&expand_home("~/.config/mdmc/config.toml"));
     match find_local_config() {
         Some(local_path) => Config::merge(Config::load(&local_path), global),
         None => global,

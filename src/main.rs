@@ -28,7 +28,7 @@ use clap::{Parser, Subcommand};
     about = "Markdown mail compiler — compile markdown drafts to RFC 5322 email"
 )]
 struct Cli {
-    /// Path to config.toml (default ~/.config/mail/config.toml)
+    /// Path to config.toml (default ~/.config/mdmc/config.toml)
     #[arg(long, global = true)]
     config: Option<PathBuf>,
 
