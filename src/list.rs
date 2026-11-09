@@ -1,9 +1,10 @@
-use std::io::{IsTerminal, Write};
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::frontmatter;
 
+/// A note entry: a draft or snapshot, with a display label and its path.
 struct Entry {
     path: PathBuf,
     name: String,
@@ -21,26 +22,14 @@ impl Entry {
     }
 }
 
-/// List drafts (`status  slug`) or snapshots (`title`). `--paths` prints file
-/// paths only; `--pick` opens a multi-select picker and prints the chosen paths.
-pub fn list(snapshots: bool, paths: bool, pick: bool, cfg: &Config) -> Result<(), String> {
-    let dir = if snapshots {
-        cfg.paths_snapshots()?
-    } else {
-        cfg.paths_source()?
-    };
-    let entries = collect_entries(&dir, snapshots);
-
-    if pick {
-        return pick_entries(&entries);
+impl fmt::Display for Entry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.label())
     }
-    if paths {
-        return print_paths(&entries);
-    }
-    print_rows(&entries);
-    Ok(())
 }
 
+/// Collect notes from `dir`: drafts (`status  slug`) or snapshots (`date
+/// title`).
 fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
     let mut entries = Vec::new();
     let Ok(items) = std::fs::read_dir(dir) else {
@@ -84,47 +73,76 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
     entries
 }
 
-fn pick_entries(entries: &[Entry]) -> Result<(), String> {
-    if entries.is_empty() {
-        return Ok(());
-    }
-    let options: Vec<String> = entries.iter().map(|e| e.label()).collect();
-    let chosen = inquire::MultiSelect::new("select", options)
-        .prompt()
-        .map_err(|e| format!("picker failed: {e}"))?;
-    let mut out = std::io::stdout().lock();
-    for e in entries {
-        if chosen.contains(&e.label()) {
-            writeln!(out, "{}", e.path.display()).map_err(|e| format!("write failed: {e}"))?;
-        }
-    }
-    Ok(())
+fn emit_paths(entries: Vec<Entry>, lines: bool) -> Result<(), String> {
+    crate::lookup::emit_values(
+        entries
+            .into_iter()
+            .map(|e| e.path.display().to_string())
+            .collect(),
+        lines,
+    )
 }
 
-fn print_paths(entries: &[Entry]) -> Result<(), String> {
-    let mut out = std::io::stdout().lock();
-    for e in entries {
-        writeln!(out, "{}", e.path.display()).map_err(|e| format!("write failed: {e}"))?;
-    }
-    Ok(())
+/// `pick drafts`: pick a draft and print its path.
+pub fn pick_drafts(multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+    let dir = cfg.paths_source()?;
+    let entries = collect_entries(&dir, false);
+    let chosen = if multi {
+        crate::lookup::pick_many("draft", entries)?
+    } else {
+        crate::lookup::pick_one("draft", entries)?
+    };
+    emit_paths(chosen, lines)
 }
 
-fn print_rows(entries: &[Entry]) {
-    let color = std::io::stdout().is_terminal();
-    let mut out = std::io::stdout().lock();
-    for e in entries {
-        let line = match (&e.status, color) {
-            (Some(status), true) => {
-                let code = match status.as_str() {
-                    "sent" => "32",
-                    "pending" => "33",
-                    "draft" => "36",
-                    _ => "2;37",
-                };
-                format!("\x1b[{code}m{status:<7}\x1b[0m  {}", e.name)
-            }
-            _ => e.label(),
-        };
-        let _ = writeln!(out, "{line}");
+/// `pick snapshots`: pick a snapshot and print its path.
+pub fn pick_snapshots(multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+    let dir = cfg.paths_snapshots()?;
+    let entries = collect_entries(&dir, true);
+    let chosen = if multi {
+        crate::lookup::pick_many("snapshot", entries)?
+    } else {
+        crate::lookup::pick_one("snapshot", entries)?
+    };
+    emit_paths(chosen, lines)
+}
+
+/// `list drafts`: print draft paths, or a JSON array with `--json`.
+pub fn list_drafts(json: bool, cfg: &Config) -> Result<(), String> {
+    let dir = cfg.paths_source()?;
+    let entries = collect_entries(&dir, false);
+    if json {
+        let out: Vec<serde_json::Value> = entries
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "slug": e.name,
+                    "status": e.status,
+                    "path": e.path.display().to_string(),
+                })
+            })
+            .collect();
+        return crate::lookup::println_json(&out);
     }
+    crate::lookup::print_values(entries.iter().map(|e| e.path.display().to_string()))
+}
+
+/// `list snapshots`: print snapshot paths, or a JSON array with `--json`.
+pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
+    let dir = cfg.paths_snapshots()?;
+    let entries = collect_entries(&dir, true);
+    if json {
+        let out: Vec<serde_json::Value> = entries
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "title": e.name,
+                    "date": e.date,
+                    "path": e.path.display().to_string(),
+                })
+            })
+            .collect();
+        return crate::lookup::println_json(&out);
+    }
+    crate::lookup::print_values(entries.iter().map(|e| e.path.display().to_string()))
 }

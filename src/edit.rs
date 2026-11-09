@@ -3,22 +3,12 @@ use std::path::{Path, PathBuf};
 use crate::config::Config;
 use crate::frontmatter;
 
-/// Open a draft in an editor. With an input, resolve a slug, path, or
-/// Message-ID to a draft; with no input, present an interactive picker over the
-/// source directory (sent drafts excluded unless `--all`). The editor is a
-/// `--editor` name, else the first configured editor, else `$EDITOR`. Never
-/// sends.
-pub fn edit(
-    input: Option<&str>,
-    editor: Option<&str>,
-    all: bool,
-    cfg: &Config,
-) -> Result<(), String> {
+/// Open a draft in an editor, resolving a slug, path, or Message-ID to a
+/// draft. The editor is a `--editor` name, else the first configured editor,
+/// else `$EDITOR`. Never sends.
+pub fn edit(input: &str, editor: Option<&str>, cfg: &Config) -> Result<(), String> {
     let source_dir = cfg.paths_source()?;
-    let path = match input {
-        Some(arg) => resolve_draft(arg, &source_dir)?,
-        None => pick_draft(&source_dir, all)?,
-    };
+    let path = resolve_draft(input, &source_dir)?;
     let command = cfg.editor(editor)?;
     crate::util::run_editor_command(&command, &path);
     Ok(())
@@ -59,45 +49,6 @@ fn find_by_message_id(source_dir: &Path, message_id: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-/// Present an interactive picker over the source directory, returning the
-/// selected draft path.
-fn pick_draft(source_dir: &Path, all: bool) -> Result<PathBuf, String> {
-    let mut entries: Vec<(String, PathBuf)> = Vec::new();
-    if let Ok(items) = std::fs::read_dir(source_dir) {
-        for item in items.flatten() {
-            let path = item.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                continue;
-            }
-            let slug = path.file_stem().unwrap().to_string_lossy().into_owned();
-            let status = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|text| frontmatter::load(&text).0)
-                .and_then(|fm| fm.status)
-                .unwrap_or_else(|| "(none)".to_string());
-            if !all && status == "sent" {
-                continue;
-            }
-            entries.push((format!("{status:<7}  {slug}"), path));
-        }
-    }
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    if entries.is_empty() {
-        return Err("no drafts to edit".to_string());
-    }
-
-    let options: Vec<String> = entries.iter().map(|(label, _)| label.clone()).collect();
-    let choice = inquire::Select::new("edit draft", options)
-        .prompt()
-        .map_err(|e| format!("picker failed: {e}"))?;
-
-    entries
-        .into_iter()
-        .find(|(label, _)| label == &choice)
-        .map(|(_, path)| path)
-        .ok_or_else(|| "picker returned an unknown draft".to_string())
 }
 
 #[cfg(test)]

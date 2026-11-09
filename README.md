@@ -45,8 +45,8 @@ mutate the copy, not the committed assets:
 ```sh
 devenv shell
 dev-setup      # populate .dev-state and build the indexes
-mdmc addr      # pick an address (`Name <email>`) from the index
-mdmc mid       # pick a message-id from the index
+mdmc pick addr # pick an address (`Name <email>`) from the index
+mdmc pick msgs # pick a message-id from the index
 dev-teardown   # wipe .dev-state to reset
 ```
 
@@ -72,14 +72,12 @@ address). With `--reply-all`, an explicit `--to`/`--cc` overrides the
 auto-filled value, and `--subject` overrides the auto-filled value in either
 mode.
 
-Open an existing draft in `$EDITOR` — by slug, path, or Message-ID, or an
-interactive picker when given no argument (sent drafts excluded unless `--all`).
+Open an existing draft in `$EDITOR` — by slug, path, or Message-ID.
 `--editor <name>` selects a named editor from `[editors]`:
 
 ```sh
 mdmc edit hello
 mdmc edit abc123@x
-mdmc edit --all
 mdmc edit hello --editor obsidian
 ```
 
@@ -104,15 +102,28 @@ Mark drafts sent once their message-id is in the account's sent maildir:
 mdmc reconcile
 ```
 
-List drafts (or snapshots with `--snapshots`):
+List drafts, snapshots, messages, or addresses to stdout:
 
 ```sh
-mdmc list
-mdmc list --snapshots        # date + title, most recent first
-mdmc list --paths            # file paths only, for piping
-mdmc list --snapshots --paths
-mdmc list --pick             # multi-select picker, prints chosen paths
+mdmc list drafts               # draft file paths
+mdmc list snapshots            # snapshot file paths
+mdmc list msgs                 # message-ids (--from, --last filters)
+mdmc list addr                 # `Name <email>` (--last filter)
 ```
+
+Or interactively pick one (or several with `--multi`) from the same four
+domains:
+
+```sh
+mdmc pick drafts
+mdmc pick snapshots
+mdmc pick msgs
+mdmc pick addr
+```
+
+Both `list` and `pick` support `--json` for structured output, and `pick
+--multi` prints selections comma-separated by default (or one per line with
+`--lines`).
 
 Print the effective (merged, resolved) config as TOML:
 

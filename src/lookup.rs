@@ -148,7 +148,7 @@ fn require_index(db: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn pick_one<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
+pub(crate) fn pick_one<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
     if options.is_empty() {
         return Err("no matches".to_string());
     }
@@ -159,7 +159,7 @@ fn pick_one<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, St
     Ok(vec![selected])
 }
 
-fn pick_many<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
+pub(crate) fn pick_many<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
     if options.is_empty() {
         return Err("no matches".to_string());
     }
@@ -170,7 +170,7 @@ fn pick_many<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, S
     Ok(selected)
 }
 
-fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
+pub(crate) fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
     let mut out = std::io::stdout().lock();
     for value in values {
         writeln!(out, "{value}").map_err(|e| format!("write failed: {e}"))?;
@@ -179,8 +179,8 @@ fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
 }
 
 /// Print values comma-joined on one line by default (to compose with
-/// `--to="$(mdmc addr --multi)"`), or one per line with `--lines`.
-fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
+/// `--to="$(mdmc pick addr --multi)"`), or one per line with `--lines`.
+pub(crate) fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
     if values.is_empty() {
         return Ok(());
     }
@@ -191,35 +191,28 @@ fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// The `addr` command: pick an address (or print all matches) and write the
-/// `Name <email>` value(s) to stdout, comma-joined on one line by default, or
-/// one per line with `--lines`.
-pub fn addr(
-    last: u32,
-    print: bool,
-    multi: bool,
-    json: bool,
-    lines: bool,
-    cfg: &Config,
-) -> Result<(), String> {
+/// Load address rows from the index, most recent first.
+fn load_addrs(last: u32, cfg: &Config) -> Result<Vec<Addr>, String> {
     let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::addresses(&db, since(last))?;
-    let addrs: Vec<Addr> = rows
+    Ok(rows
         .into_iter()
         .map(|(address, name)| Addr { name, address })
-        .collect();
+        .collect())
+}
 
-    if json {
-        let out: Vec<serde_json::Value> = addrs
-            .iter()
-            .map(|a| serde_json::json!({"name": a.name, "address": a.address}))
-            .collect();
-        return println_json(&out);
-    }
-    if print {
-        return emit_values(addrs.iter().map(|a| a.name_addr()).collect(), lines);
-    }
+/// Load message rows from the index, most recent first.
+fn load_msgs(from: Option<&str>, last: u32, cfg: &Config) -> Result<Vec<Msg>, String> {
+    let db = cfg.paths_index();
+    require_index(&db)?;
+    let rows = crate::index::messages(&db, since(last), from)?;
+    Ok(build_msgs(rows))
+}
+
+/// `pick addr`: pick an address and print `Name <email>`.
+pub fn pick_addr(last: u32, multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+    let addrs = load_addrs(last, cfg)?;
     let chosen = if multi {
         pick_many("address", addrs)?
     } else {
@@ -228,23 +221,39 @@ pub fn addr(
     emit_values(chosen.into_iter().map(|a| a.name_addr()).collect(), lines)
 }
 
-/// The `mid` command: pick a message (or print all matches) and write the
-/// message-id(s) to stdout, comma-joined on one line by default, or one per
-/// line with `--lines`.
-pub fn mid(
+/// `list addr`: print addresses (`Name <email>`), or a JSON array with `--json`.
+pub fn list_addr(last: u32, json: bool, cfg: &Config) -> Result<(), String> {
+    let addrs = load_addrs(last, cfg)?;
+    if json {
+        let out: Vec<serde_json::Value> = addrs
+            .iter()
+            .map(|a| serde_json::json!({"name": a.name, "address": a.address}))
+            .collect();
+        return println_json(&out);
+    }
+    print_values(addrs.iter().map(|a| a.name_addr()))
+}
+
+/// `pick msgs`: pick a message and print its message-id.
+pub fn pick_msgs(
     from: Option<&str>,
     last: u32,
-    print: bool,
     multi: bool,
-    json: bool,
     lines: bool,
     cfg: &Config,
 ) -> Result<(), String> {
-    let db = cfg.paths_index();
-    require_index(&db)?;
-    let rows = crate::index::messages(&db, since(last), from)?;
-    let msgs = build_msgs(rows);
+    let msgs = load_msgs(from, last, cfg)?;
+    let chosen = if multi {
+        pick_many("message", msgs)?
+    } else {
+        pick_one("message", msgs)?
+    };
+    emit_values(chosen.into_iter().map(|m| m.id).collect(), lines)
+}
 
+/// `list msgs`: print message-ids, or a JSON array with `--json`.
+pub fn list_msgs(from: Option<&str>, last: u32, json: bool, cfg: &Config) -> Result<(), String> {
+    let msgs = load_msgs(from, last, cfg)?;
     if json {
         let out: Vec<serde_json::Value> = msgs
             .iter()
@@ -259,32 +268,10 @@ pub fn mid(
             .collect();
         return println_json(&out);
     }
-    if print {
-        return emit_values(msgs.iter().map(|m| m.id.clone()).collect(), lines);
-    }
-    let chosen = if multi {
-        pick_many("message", msgs)?
-    } else {
-        pick_one("message", msgs)?
-    };
-    emit_values(chosen.into_iter().map(|m| m.id).collect(), lines)
+    print_values(msgs.iter().map(|m| m.id.clone()))
 }
 
-/// Pick a single message and return its message-id (used by the `view` and
-/// `decompile` omit-input pickers).
-pub fn pick_message_id(from: Option<&str>, last: u32, cfg: &Config) -> Result<String, String> {
-    let db = cfg.paths_index();
-    require_index(&db)?;
-    let rows = crate::index::messages(&db, since(last), from)?;
-    let msgs = build_msgs(rows);
-    if msgs.is_empty() {
-        return Err("no messages in index — run `mdmc index` first".to_string());
-    }
-    let chosen = pick_one("message", msgs)?;
-    Ok(chosen.into_iter().next().unwrap().id)
-}
-
-fn println_json(value: &[serde_json::Value]) -> Result<(), String> {
+pub(crate) fn println_json(value: &[serde_json::Value]) -> Result<(), String> {
     println!(
         "{}",
         serde_json::to_string(value).map_err(|e| format!("json: {e}"))?

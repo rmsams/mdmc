@@ -17,7 +17,6 @@ mod reply;
 mod util;
 mod view;
 
-use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -40,7 +39,7 @@ struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Command {
-    /// Create a new email draft. Never sends.
+    /// Create a new email draft
     New {
         /// Account name (default: [defaults].account in config)
         #[arg(long)]
@@ -94,18 +93,15 @@ enum Command {
         #[arg(long)]
         editor: bool,
     },
-    /// Open a draft in $EDITOR (interactive picker when no input). Never sends.
+    /// Open a draft in $EDITOR
     Edit {
-        /// Draft slug, path, or Message-ID to open; omit for a picker
-        input: Option<String>,
+        /// Draft slug, path, or Message-ID to open
+        input: String,
         /// Editor name from [editors] (default: first configured, else $EDITOR)
         #[arg(long)]
         editor: Option<String>,
-        /// Include sent drafts in the picker
-        #[arg(long)]
-        all: bool,
     },
-    /// Compile a draft to a message (RFC 5322). Never sends.
+    /// Compile a draft to a message (RFC 5322)
     Compile {
         /// Draft filename (slug) or path to compile
         draft: String,
@@ -119,10 +115,10 @@ enum Command {
         #[arg(long)]
         again: bool,
     },
-    /// Decompile a message to a markdown snapshot note. Never sends.
+    /// Decompile a message to a markdown snapshot note
     Decompile {
-        /// Message-ID, a raw message file path, or `-` for stdin; omit for a picker
-        input: Option<String>,
+        /// Message-ID, a raw message file path, or `-` for stdin
+        input: String,
         /// Print the note to stdout instead of writing to [paths] snapshots
         #[arg(long)]
         stdout: bool,
@@ -132,66 +128,111 @@ enum Command {
     },
     /// Mark drafts sent when their message-id is in the account's sent maildir.
     Reconcile,
-    /// List drafts (or snapshots). Never sends.
-    List {
-        /// List snapshots instead of drafts
-        #[arg(long)]
-        snapshots: bool,
-        /// Print file paths only
-        #[arg(long)]
-        paths: bool,
-        /// Pick files interactively (multi-select) and print their paths
-        #[arg(long)]
-        pick: bool,
+    /// Pick a draft, snapshot, message, or address (interactive).
+    Pick {
+        #[command(subcommand)]
+        domain: PickDomain,
     },
-    /// Print the effective (merged, resolved) config as TOML. Never sends.
-    Config,
-    /// Print a message as markdown to stdout (no attachment extraction). Never sends.
+    /// List drafts, snapshots, messages, or addresses to stdout.
+    List {
+        #[command(subcommand)]
+        domain: ListDomain,
+    },
+    /// Print a message as markdown to stdout (no attachment extraction).
     View {
-        /// Message-ID, a raw message file path, or `-` for stdin; omit for a picker
-        input: Option<String>,
+        /// Message-ID, a raw message file path, or `-` for stdin
+        input: String,
         /// Print only a header + body, omitting the frontmatter
         #[arg(long)]
         body_only: bool,
     },
-    /// Build (or rebuild) the lookup index from notmuch. Never sends.
+    /// Print the effective (merged, resolved) config as TOML.
+    Config,
+    /// Build (or rebuild) the lookup index from notmuch.
     Index,
-    /// Pick an address (`Name <email>`) from the index and print it. Never sends.
-    Addr {
-        /// Only consider addresses seen in the last N days (0 = no bound)
-        #[arg(long)]
-        last: Option<u32>,
-        /// Print every match instead of opening a picker
-        #[arg(long)]
-        print: bool,
-        /// Allow selecting multiple addresses
-        #[arg(long)]
-        multi: bool,
-        /// Print a JSON array instead of plain values (implies no picker)
+}
+
+#[derive(Subcommand)]
+enum ListDomain {
+    /// List draft file paths
+    Drafts {
+        /// Print a JSON array instead of plain paths
         #[arg(long)]
         json: bool,
-        /// Print values one per line instead of comma-separated
-        #[arg(long)]
-        lines: bool,
     },
-    /// Pick a message-id from the index and print it. Never sends.
-    Mid {
+    /// List snapshot file paths
+    Snapshots {
+        /// Print a JSON array instead of plain paths
+        #[arg(long)]
+        json: bool,
+    },
+    /// List message-ids
+    Msgs {
         /// Restrict to messages whose sender matches this substring
         #[arg(long)]
         from: Option<String>,
         /// Only consider messages from the last N days (0 = no bound)
         #[arg(long)]
         last: Option<u32>,
-        /// Print every match instead of opening a picker
+        /// Print a JSON array instead of plain ids
         #[arg(long)]
-        print: bool,
+        json: bool,
+    },
+    /// List addresses
+    Addr {
+        /// Only consider addresses seen in the last N days (0 = no bound)
+        #[arg(long)]
+        last: Option<u32>,
+        /// Print a JSON array instead of plain values
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum PickDomain {
+    /// Pick a draft and print its path
+    Drafts {
+        /// Allow selecting multiple drafts
+        #[arg(long)]
+        multi: bool,
+        /// Print multiple selections one per line instead of comma-separated
+        #[arg(long)]
+        lines: bool,
+    },
+    /// Pick a snapshot and print its path
+    Snapshots {
+        /// Allow selecting multiple snapshots
+        #[arg(long)]
+        multi: bool,
+        /// Print multiple selections one per line instead of comma-separated
+        #[arg(long)]
+        lines: bool,
+    },
+    /// Pick a message and print its message-id
+    Msgs {
+        /// Restrict to messages whose sender matches this substring
+        #[arg(long)]
+        from: Option<String>,
+        /// Only consider messages from the last N days (0 = no bound)
+        #[arg(long)]
+        last: Option<u32>,
         /// Allow selecting multiple messages
         #[arg(long)]
         multi: bool,
-        /// Print a JSON array instead of plain values (implies no picker)
+        /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
-        json: bool,
-        /// Print values one per line instead of comma-separated
+        lines: bool,
+    },
+    /// Pick an address and print `Name <email>`
+    Addr {
+        /// Only consider addresses seen in the last N days (0 = no bound)
+        #[arg(long)]
+        last: Option<u32>,
+        /// Allow selecting multiple addresses
+        #[arg(long)]
+        multi: bool,
+        /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
         lines: bool,
     },
@@ -252,9 +293,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             encrypt,
             editor,
         ),
-        Command::Edit { input, editor, all } => {
-            edit::edit(input.as_deref(), editor.as_deref(), all, cfg)
-        }
+        Command::Edit { input, editor } => edit::edit(&input, editor.as_deref(), cfg),
         Command::Compile {
             draft,
             stdout,
@@ -265,15 +304,10 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             input,
             stdout,
             link_attachments,
-        } => decompile::decompile(&mid_arg(input, cfg)?, stdout, link_attachments, cfg),
+        } => decompile::decompile(&input, stdout, link_attachments, cfg),
         Command::Reconcile => reconcile::reconcile(cfg),
-        Command::List {
-            snapshots,
-            paths,
-            pick,
-        } => list::list(snapshots, paths, pick, cfg),
         Command::Config => cfg.to_toml().map(|s| println!("{s}")),
-        Command::View { input, body_only } => view::view(&mid_arg(input, cfg)?, body_only, cfg),
+        Command::View { input, body_only } => view::view(&input, body_only, cfg),
         Command::Index => {
             let query = cfg.index_query()?;
             let db = cfg.paths_index();
@@ -281,43 +315,26 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             println!("indexed {n} messages in {}", db.display());
             Ok(())
         }
-        Command::Addr {
-            last,
-            print,
-            multi,
-            json,
-            lines,
-        } => lookup::addr(last.unwrap_or(30), print, multi, json, lines, cfg),
-        Command::Mid {
-            from,
-            last,
-            print,
-            multi,
-            json,
-            lines,
-        } => lookup::mid(
-            from.as_deref(),
-            last.unwrap_or(30),
-            print,
-            multi,
-            json,
-            lines,
-            cfg,
-        ),
-    }
-}
-
-/// Resolve an optional `view`/`decompile` input: an explicit value passes
-/// through; when omitted on a terminal, an interactive message-id picker runs;
-/// when omitted on a non-terminal, an error is returned.
-fn mid_arg(input: Option<String>, cfg: &config::Config) -> Result<String, String> {
-    match input {
-        Some(value) => Ok(value),
-        None => {
-            if !std::io::stdin().is_terminal() {
-                return Err("no input (omit for an interactive picker on a terminal)".to_string());
+        Command::List { domain } => match domain {
+            ListDomain::Drafts { json } => list::list_drafts(json, cfg),
+            ListDomain::Snapshots { json } => list::list_snapshots(json, cfg),
+            ListDomain::Msgs { from, last, json } => {
+                lookup::list_msgs(from.as_deref(), last.unwrap_or(30), json, cfg)
             }
-            lookup::pick_message_id(None, 30, cfg)
-        }
+            ListDomain::Addr { last, json } => lookup::list_addr(last.unwrap_or(30), json, cfg),
+        },
+        Command::Pick { domain } => match domain {
+            PickDomain::Drafts { multi, lines } => list::pick_drafts(multi, lines, cfg),
+            PickDomain::Snapshots { multi, lines } => list::pick_snapshots(multi, lines, cfg),
+            PickDomain::Msgs {
+                from,
+                last,
+                multi,
+                lines,
+            } => lookup::pick_msgs(from.as_deref(), last.unwrap_or(30), multi, lines, cfg),
+            PickDomain::Addr { last, multi, lines } => {
+                lookup::pick_addr(last.unwrap_or(30), multi, lines, cfg)
+            }
+        },
     }
 }

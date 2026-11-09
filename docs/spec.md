@@ -8,24 +8,22 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 `mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. With `--reply <id>` or
-`--reply-all <id>`, it
-resolves the original message and auto-fills the envelope (see Reply). `mdmc edit` opens an existing
-draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
-compiles a draft to RFC 5322 and delivers it, refusing a draft already marked
-`sent` unless `--again` is given. `mdmc reconcile` marks drafts `sent` once their
-message-id is in the account's sent maildir. `mdmc list` prints draft rows as
-`status  slug` (colour-coded) or, with `--snapshots`, snapshot rows as
-`date  title` (most recent first); `--paths` prints file paths only and `--pick`
-opens a multi-select picker that prints the chosen paths. `mdmc decompile` turns
-a raw message back into a markdown snapshot note. `mdmc view` prints a message
+`--reply-all <id>`, it resolves the original message and auto-fills the
+envelope (see Reply). `mdmc edit` opens an existing draft in `$EDITOR`.
+`mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
+already marked `sent` unless `--again` is given. `mdmc reconcile` marks drafts
+`sent` once their message-id is in the account's sent maildir.
+
+`mdmc list <domain>` enumerates a domain to stdout (paths for `drafts` and
+`snapshots`, message-ids for `msgs`, `Name <email>` for `addr`), with `--json`
+for structured output. `mdmc pick <domain>` opens an interactive picker over
+the same four domains and prints the chosen value(s). `mdmc decompile` turns a
+raw message back into a markdown snapshot note. `mdmc view` prints a message
 as markdown to stdout with no attachment extraction and no `cid:` rewriting:
 by default a full snapshot note (frontmatter + body), or, with `--body-only`,
-just a subject/meta header + body — a terminal-reader mode. `mdmc decompile`
-and `mdmc view` both take an optional input and open the message picker on a
-terminal when it is omitted. `mdmc index` builds the lookup index; `mdmc addr`
-and `mdmc mid` pick an address or message-id from it (see Lookup index).
-`mdmc config` prints the
-effective (merged, resolved) config as TOML. None of them ever send.
+just a subject/meta header + body — a terminal-reader mode. `mdmc index` builds
+the lookup index that `list`/`pick msgs` and `addr` query. `mdmc config` prints
+the effective (merged, resolved) config as TOML. None of them ever send.
 
 ## Decompile
 
@@ -36,8 +34,7 @@ message into a markdown snapshot note (a `mail-snapshot`). The inverse of
 The `<input>` is disambiguated by shape: `-` reads a raw message from stdin; a
 path to an existing file reads that file as raw message; anything else is
 treated as a Message-ID, resolved via notmuch's `mid:` term with a maildir-scan
-fallback (see Message-id resolution). With no `<input>`, an interactive
-message-id picker runs on a terminal (a hard error on a non-terminal).
+fallback (see Message-id resolution).
 
 The snapshot note lives at `[paths] snapshots/<slug>.md`, where `slug` is a
 filesystem-safe form of the message's Message-ID (identity for
@@ -126,24 +123,24 @@ matching the query it reads only the header block and stores the message-id,
 index`, defaulting to `$XDG_DATA_HOME/mdmc/index.db`. It is a manual, periodic
 batch — rebuild with `mdmc index` after syncing.
 
-`mdmc addr` and `mdmc mid` query this index (never notmuch, so the slow
-address enumeration is off the interactive path):
+`mdmc list msgs`/`list addr` and `mdmc pick msgs`/`pick addr` query this index
+(never notmuch, so the slow address enumeration is off the interactive path):
 
-- `mdmc addr [--last N] [--print] [--multi] [--json]` picks an address and
-  prints `Name <email>`; addresses are deduplicated by address, most recent
-  first.
-- `mdmc mid [--from A] [--last N] [--print] [--multi] [--json]` picks a
-  message (displayed as aligned `sender | datetime | subject` columns) and
-  prints its message-id.
+- `mdmc pick addr [--last N] [--multi] [--lines]` picks an address and prints
+  `Name <email>`; addresses are deduplicated by address, most recent first.
+- `mdmc pick msgs [--from A] [--last N] [--multi] [--lines]` picks a message
+  (displayed as aligned `sender | datetime | subject` columns) and prints its
+  message-id.
+- `mdmc list addr [--last N] [--json]` and `mdmc list msgs [--from A] [--last N]
+  [--json]` print all matches to stdout instead of opening a picker.
 - `--last N` bounds by recency (default 30 days; `0` lifts the bound); `--from`
-  is a case-insensitive substring on the sender's name or address. `--print`
-  and the picker both emit values comma-separated by default, or one per line
-  with `--lines`; `--json` emits a JSON array (and implies no picker);
-  `--multi` allows multiple selections. Missing index is a hard error ("run
-  `mdmc index` first").
+  is a case-insensitive substring on the sender's name or address. Pickers emit
+  multiple selections comma-separated by default, or one per line with
+  `--lines`; `list` emits one value per line and `--json` emits a JSON array.
+  Missing index is a hard error ("run `mdmc index` first").
 
-`mdmc view` and `mdmc decompile` with no input open the message picker on a
-terminal, so `mdmc view $(mdmc mid)` can be shortened to `mdmc view`.
+Selection is composable: `mdmc view "$(mdmc pick msgs)"` and
+`mdmc decompile "$(mdmc pick msgs)"`.
 
 ## Compile pipeline
 
@@ -283,7 +280,8 @@ construction, so it does not validate; the schema is for external validation
 - `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `index.rs` — the SQLite lookup index (build + query).
-- `lookup.rs` — the `addr`/`mid` pickers and the `view`/`decompile` omit-input picker.
+- `list.rs` — the `list`/`pick drafts` and `list`/`pick snapshots` note selectors.
+- `lookup.rs` — the `list`/`pick msgs` and `list`/`pick addr` index selectors, plus the shared picker/output helpers.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `maildir.rs` — maildir delivery/dedup helpers and the Message-ID scan fallback.
