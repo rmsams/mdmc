@@ -22,9 +22,6 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   option to trim or collapse quoted context would improve readability.
 - **Maildir scan cache** — `find_message_in_tree` walks the whole mail tree per
   Message-ID; a cached id→file map would matter once decompile runs in bulk.
-- **Auto-fill recipients on reply** — `mdmc new --in-reply-to` should look up the
-  original message and pre-populate `to`/`cc`, supporting both `reply` (to the
-  sender) and `reply all` (to sender + other recipients) variants.
 
 ## Open questions
 

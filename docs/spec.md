@@ -7,7 +7,8 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 
 `mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
-shipped schema, and optionally opens `$EDITOR`. `mdmc edit` opens an existing
+shipped schema, and optionally opens `$EDITOR`. With `--in-reply-to <id>`, it
+resolves the original message and auto-fills the envelope (see Reply). `mdmc edit` opens an existing
 draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
 compiles a draft to RFC 5322 and delivers it, refusing a draft already marked
 `sent` unless `--again` is given. `mdmc reconcile` marks drafts `sent` once their
@@ -84,6 +85,20 @@ every delivery mode — `--stdout`, `--folder`, and the drafts maildir — emits
 same Message-ID. Maildir delivery overwrites any existing message carrying the
 same Message-ID (scanning `new/` and `cur/` headers), so re-running `compile` is
 idempotent and never leaves stale duplicate drafts.
+
+## Reply
+
+`mdmc new --in-reply-to <id>` resolves the original message by the same maildir
+scan `decompile` uses (a missing `paths.mail`, a Message-ID that cannot be
+found, or an unparseable message is a hard error) and auto-fills the envelope.
+
+The sender is the first `Reply-To` mailbox, falling back to the first `From`
+mailbox (a message with neither is an error). By default the reply goes to the
+sender alone (`to`); `--reply-all` additionally fills `cc` with every original
+`To`/`Cc` mailbox, minus the sender and minus the account's own `from` address.
+The subject is prefixed with `Re: ` unless it already has the prefix. Explicit
+`--to`/`--cc`/`--subject` flags override the auto-filled values. The
+`in-reply-to` and `quote: auto` fields are always written.
 
 ## Compile pipeline
 
@@ -212,6 +227,7 @@ construction, so it does not validate; the schema is for external validation
 
 ## Module map
 
+- `addr.rs` — mailbox/address-list formatting helpers.
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
@@ -220,6 +236,7 @@ construction, so it does not validate; the schema is for external validation
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `quote.rs` — reply quoting (maildir scan + `mail-parser`).
+- `reply.rs` — reply envelope resolution (recipients + subject).
 - `util.rs` — hostname and Message-ID generation.
 
 ## MML crate

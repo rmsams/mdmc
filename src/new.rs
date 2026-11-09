@@ -82,6 +82,7 @@ pub fn new(
     bcc: Option<String>,
     subject: Option<String>,
     in_reply_to: Option<String>,
+    reply_all: bool,
     attachments: Vec<String>,
     body: Option<String>,
     format: Option<String>,
@@ -98,6 +99,9 @@ pub fn new(
             return Err("--format must be one of text, html, plain.".into());
         }
     }
+    if reply_all && in_reply_to.is_none() {
+        return Err("--reply-all requires --in-reply-to.".into());
+    }
 
     let drafts_dir = cfg.paths_source()?;
 
@@ -108,13 +112,28 @@ pub fn new(
         return Err("no account specified and no default account configured.".into());
     };
     // Validate the account exists (signature/send identity are not needed here).
-    cfg.resolve_account(&acct_name)?;
+    let acct = cfg.resolve_account(&acct_name)?;
+    let self_addr = acct.from.as_deref().unwrap_or("").to_string();
+
+    let (reply_to, reply_cc, reply_subject) = match &in_reply_to {
+        Some(irt) => {
+            let mail_root = cfg.paths_mail()?;
+            let message = crate::reply::resolve(irt, &mail_root)?;
+            let env = crate::reply::envelope(&message, &self_addr, reply_all)?;
+            (env.to, env.cc, env.subject)
+        }
+        None => (Vec::new(), Vec::new(), None),
+    };
+
+    let effective_subject = subject.clone().or(reply_subject);
+    let effective_to = to.as_deref().map(split_addresses).unwrap_or(reply_to);
+    let effective_cc = cc.as_deref().map(split_addresses).unwrap_or(reply_cc);
 
     let mut fields: Vec<(String, Field)> = vec![
         (
             "title".to_string(),
             Field::Str(
-                subject
+                effective_subject
                     .clone()
                     .unwrap_or_else(|| "(no subject)".to_string()),
             ),
@@ -127,20 +146,14 @@ pub fn new(
             Field::Str(format.unwrap_or_else(|| "text".to_string())),
         ),
     ];
-    if let Some(subject) = &subject {
+    if let Some(subject) = &effective_subject {
         fields.push(("subject".to_string(), Field::Str(subject.clone())));
     }
-    if let Some(to) = &to {
-        let list = split_addresses(to);
-        if !list.is_empty() {
-            fields.push(("to".to_string(), Field::List(list)));
-        }
+    if !effective_to.is_empty() {
+        fields.push(("to".to_string(), Field::List(effective_to)));
     }
-    if let Some(cc) = &cc {
-        let list = split_addresses(cc);
-        if !list.is_empty() {
-            fields.push(("cc".to_string(), Field::List(list)));
-        }
+    if !effective_cc.is_empty() {
+        fields.push(("cc".to_string(), Field::List(effective_cc)));
     }
     if let Some(bcc) = &bcc {
         let list = split_addresses(bcc);
@@ -185,7 +198,7 @@ pub fn new(
     let body_text = body.unwrap_or_default();
     let body_text = body_text.trim_end_matches('\n');
 
-    let slug = slugify(subject.as_deref().unwrap_or("draft"));
+    let slug = slugify(effective_subject.as_deref().unwrap_or("draft"));
     let mut path: PathBuf = drafts_dir.join(format!("{slug}.md"));
     let mut n = 2;
     while path.exists() {
@@ -246,5 +259,142 @@ mod tests {
             split_addresses("\"He said \\\"hi\\\"\" <x@y.com>"),
             vec!["\"He said \\\"hi\\\"\" <x@y.com>"]
         );
+    }
+
+    fn setup_maildir() -> (std::path::PathBuf, Config, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("mdmc-new-{}", uuid::Uuid::new_v4()));
+        let source = dir.join("drafts");
+        let mail = dir.join("mail");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(mail.join("acct").join("cur")).unwrap();
+        std::fs::write(
+            mail.join("acct").join("cur").join("m1"),
+            concat!(
+                "From: Ann <ann@example.com>\r\n",
+                "To: Bob <bob@example.com>, me@self.com\r\n",
+                "Cc: Cy <cy@example.com>\r\n",
+                "Subject: Lunch\r\n",
+                "Message-ID: <m1@example.com>\r\n",
+                "\r\n",
+                "Body\r\n",
+            ),
+        )
+        .unwrap();
+        let cfg = Config {
+            paths: crate::config::Paths {
+                source: Some(source.to_string_lossy().into_owned()),
+                mail: Some(mail.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+            accounts: std::collections::BTreeMap::from([(
+                "test".to_string(),
+                crate::config::Account {
+                    from: Some("me@self.com".to_string()),
+                    ..Default::default()
+                },
+            )]),
+            ..Default::default()
+        };
+        (dir, cfg, source)
+    }
+
+    fn run_new(
+        cfg: &Config,
+        in_reply_to: Option<&str>,
+        reply_all: bool,
+        to: Option<&str>,
+        cc: Option<&str>,
+        subject: Option<&str>,
+    ) -> Result<(), String> {
+        new(
+            cfg,
+            Some("test".to_string()),
+            to.map(str::to_string),
+            cc.map(str::to_string),
+            None,
+            subject.map(str::to_string),
+            in_reply_to.map(str::to_string),
+            reply_all,
+            Vec::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+        )
+    }
+
+    #[test]
+    fn new_reply_fills_envelope() {
+        let (dir, cfg, source) = setup_maildir();
+        run_new(&cfg, Some("m1@example.com"), false, None, None, None).unwrap();
+
+        let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
+        assert!(text.contains("subject: 'Re: Lunch'\n"));
+        assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
+        assert!(text.contains("in-reply-to: m1@example.com\n"));
+        assert!(text.contains("quote: auto\n"));
+        assert!(!text.contains("cc:"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_all_fills_cc_and_excludes_self() {
+        let (dir, cfg, source) = setup_maildir();
+        run_new(&cfg, Some("m1@example.com"), true, None, None, None).unwrap();
+
+        let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
+        assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
+        assert!(text.contains("cc:\n  - Bob <bob@example.com>\n  - Cy <cy@example.com>\n"));
+        assert!(!text.contains("me@self.com"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_respects_explicit_flags() {
+        let (dir, cfg, source) = setup_maildir();
+        run_new(
+            &cfg,
+            Some("m1@example.com"),
+            true,
+            Some("override@example.com"),
+            Some("override-cc@example.com"),
+            Some("My subject"),
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("my-subject.md")).unwrap();
+        assert!(text.contains("subject: My subject\n"));
+        assert!(text.contains("to:\n  - override@example.com\n"));
+        assert!(text.contains("cc:\n  - override-cc@example.com\n"));
+        assert!(!text.contains("Ann <ann@example.com>"));
+        assert!(!text.contains("Bob <bob@example.com>"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_errors_when_message_missing() {
+        let (dir, cfg, _source) = setup_maildir();
+        let err = run_new(&cfg, Some("missing@example.com"), false, None, None, None).unwrap_err();
+        assert!(err.contains("not found"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_all_requires_in_reply_to() {
+        let (dir, cfg, source) = setup_maildir();
+        let err = run_new(&cfg, None, true, None, None, None).unwrap_err();
+        assert!(err.contains("--reply-all requires --in-reply-to"));
+        assert!(!source.join("draft.md").exists());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

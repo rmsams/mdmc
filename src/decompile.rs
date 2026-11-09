@@ -4,8 +4,9 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use mail_parser::{AddressList, Mailbox, Message, MessageParser, MessagePart, PartKind};
+use mail_parser::{Message, MessageParser, MessagePart, PartKind};
 
+use crate::addr::{addresses, format_mailbox};
 use crate::config::Config;
 use crate::frontmatter::{self, Field};
 
@@ -361,22 +362,6 @@ fn build_fields(
         fields.push(("attachments".to_string(), Field::ObjectList(objects)));
     }
     fields
-}
-
-fn format_mailbox(mailbox: &Mailbox) -> String {
-    match (mailbox.name(), mailbox.address()) {
-        (Some(name), Some(addr)) if !name.is_empty() => format!("{name} <{addr}>"),
-        (_, Some(addr)) => addr.to_string(),
-        (Some(name), None) => name.to_string(),
-        (None, None) => String::new(),
-    }
-}
-
-fn addresses(list: &AddressList) -> Vec<String> {
-    list.mailboxes()
-        .map(|mailbox| format_mailbox(&mailbox))
-        .filter(|s| !s.is_empty())
-        .collect()
 }
 
 /// A reversible, filesystem-safe form of a Message-ID. Identity for the common

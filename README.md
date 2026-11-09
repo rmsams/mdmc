@@ -50,6 +50,18 @@ Create a draft:
 mdmc new --account rmsams-gmail --to "a@example.com" --subject "Hello" --format html --body "Hi **there**."
 ```
 
+Reply to a message by Message-ID — the original is resolved from the maildir
+tree and the envelope is auto-filled (sender in `to`, `Re:`-prefixed subject):
+
+```sh
+mdmc new --account rmsams-gmail --in-reply-to 20260101.123456.abc@x1g11
+mdmc new --account rmsams-gmail --in-reply-to 20260101.123456.abc@x1g11 --reply-all
+```
+
+`--reply-all` also fills `cc` with the original recipients (minus the sender and
+your own address). An explicit `--to`/`--cc`/`--subject` overrides the
+auto-filled value.
+
 Open an existing draft in `$EDITOR` — by slug, path, or Message-ID, or an
 interactive picker when given no argument (sent drafts excluded unless `--all`).
 `--editor <name>` selects a named editor from `[editors]`:

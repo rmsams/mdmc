@@ -1,3 +1,4 @@
+mod addr;
 mod compile;
 mod config;
 mod decompile;
@@ -9,6 +10,7 @@ mod mml;
 mod new;
 mod quote;
 mod reconcile;
+mod reply;
 mod util;
 
 use std::path::PathBuf;
@@ -53,6 +55,9 @@ enum Command {
         /// Message-ID being replied to
         #[arg(long)]
         in_reply_to: Option<String>,
+        /// Reply to all recipients (sender + original To/Cc) instead of sender only
+        #[arg(long)]
+        reply_all: bool,
         /// Attachment file path(s)
         #[arg(long)]
         attachments: Vec<String>,
@@ -155,6 +160,7 @@ fn main() {
             bcc,
             subject,
             in_reply_to,
+            reply_all,
             attachments,
             body,
             format,
@@ -173,6 +179,7 @@ fn main() {
             bcc,
             subject,
             in_reply_to,
+            reply_all,
             attachments,
             body,
             format,

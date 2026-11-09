@@ -1,16 +1,8 @@
 use std::path::Path;
 
-use mail_parser::{Mailbox, MessageParser};
+use mail_parser::MessageParser;
 
-/// Format a mailbox as `Name <addr>`, the bare address, or the bare name.
-fn format_mailbox(mailbox: &Mailbox) -> String {
-    match (mailbox.name(), mailbox.address()) {
-        (Some(name), Some(addr)) if !name.is_empty() => format!("{name} <{addr}>"),
-        (_, Some(addr)) => addr.to_string(),
-        (Some(name), None) => name.to_string(),
-        (None, None) => String::new(),
-    }
-}
+use crate::addr::format_mailbox;
 
 /// Build the reply quote for a message-id, or an empty string when the
 /// message cannot be found. The message is resolved by scanning the maildir
