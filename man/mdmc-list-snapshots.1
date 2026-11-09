@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-list-snapshots 1  "snapshots " 
+.SH NAME
+mdmc\-list\-snapshots \- List snapshot file paths
+.SH SYNOPSIS
+\fBmdmc list snapshots\fR [\fB\-\-config\fR] [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+List snapshot file paths
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-json\fR
+Print a JSON array instead of plain paths
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

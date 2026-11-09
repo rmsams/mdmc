@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-view 1  "view " 
+.SH NAME
+mdmc\-view \- Print a message as markdown to stdout (no attachment extraction)
+.SH SYNOPSIS
+\fBmdmc view\fR [\fB\-\-body\-only\fR] [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
+.SH DESCRIPTION
+Print a message as markdown to stdout (no attachment extraction)
+.SH OPTIONS
+.TP
+\fB\-\-body\-only\fR
+Print only a header + body, omitting the frontmatter
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIINPUT\fR>
+Message\-ID, a raw message file path, or `\-` for stdin

@@ -25,6 +25,9 @@ inquire = "0.9"
 rusqlite = "0.32"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
+[dev-dependencies]
+clap_mangen = "0.3"
+
 [profile.release]
 lto = true
 strip = true

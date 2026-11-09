@@ -1,0 +1,52 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc 1  "mdmc 0.1.0" 
+.SH NAME
+mdmc \- Markdown mail compiler — compile markdown drafts to RFC 5322 email
+.SH SYNOPSIS
+\fBmdmc\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Markdown mail compiler — compile markdown drafts to RFC 5322 email
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+mdmc\-new(1)
+Create a new email draft
+.TP
+mdmc\-edit(1)
+Open a draft in $EDITOR
+.TP
+mdmc\-compile(1)
+Compile a draft to a message (RFC 5322)
+.TP
+mdmc\-decompile(1)
+Decompile a message to a markdown snapshot note
+.TP
+mdmc\-reconcile(1)
+Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+.TP
+mdmc\-pick(1)
+Pick a draft, snapshot, message, or address (interactive)
+.TP
+mdmc\-list(1)
+List drafts, snapshots, messages, or addresses to stdout
+.TP
+mdmc\-view(1)
+Print a message as markdown to stdout (no attachment extraction)
+.TP
+mdmc\-config(1)
+Print the effective (merged, resolved) config as TOML
+.TP
+mdmc\-index(1)
+Build (or rebuild) the lookup index from notmuch
+.SH VERSION
+v0.1.0

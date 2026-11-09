@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-list-drafts 1  "drafts " 
+.SH NAME
+mdmc\-list\-drafts \- List draft file paths
+.SH SYNOPSIS
+\fBmdmc list drafts\fR [\fB\-\-config\fR] [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+List draft file paths
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-json\fR
+Print a JSON array instead of plain paths
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

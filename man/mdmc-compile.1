@@ -1,0 +1,28 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-compile 1  "compile " 
+.SH NAME
+mdmc\-compile \- Compile a draft to a message (RFC 5322)
+.SH SYNOPSIS
+\fBmdmc compile\fR [\fB\-\-config\fR] [\fB\-\-stdout\fR] [\fB\-\-folder\fR] [\fB\-\-again\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIDRAFT\fR> 
+.SH DESCRIPTION
+Compile a draft to a message (RFC 5322)
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-stdout\fR
+Print the compiled message to stdout instead of a maildir
+.TP
+\fB\-\-folder\fR \fI<FOLDER>\fR
+Write to this maildir: a [folders] config name or a literal path
+.TP
+\fB\-\-again\fR
+Allow compiling a draft already marked sent
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIDRAFT\fR>
+Draft filename (slug) or path to compile

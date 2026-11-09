@@ -1,0 +1,29 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-list 1  "list " 
+.SH NAME
+mdmc\-list \- List drafts, snapshots, messages, or addresses to stdout
+.SH SYNOPSIS
+\fBmdmc list\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+List drafts, snapshots, messages, or addresses to stdout
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+mdmc\-list\-drafts(1)
+List draft file paths
+.TP
+mdmc\-list\-snapshots(1)
+List snapshot file paths
+.TP
+mdmc\-list\-msgs(1)
+List message\-ids
+.TP
+mdmc\-list\-addr(1)
+List addresses

@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-pick-drafts 1  "drafts " 
+.SH NAME
+mdmc\-pick\-drafts \- Pick a draft and print its path
+.SH SYNOPSIS
+\fBmdmc pick drafts\fR [\fB\-\-config\fR] [\fB\-\-multi\fR] [\fB\-\-lines\fR] [\fB\-\-page\-size\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Pick a draft and print its path
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-multi\fR
+Allow selecting multiple drafts
+.TP
+\fB\-\-lines\fR
+Print multiple selections one per line instead of comma\-separated
+.TP
+\fB\-\-page\-size\fR \fI<PAGE_SIZE>\fR
+Number of picker rows to show (default: [lookup] page_size)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

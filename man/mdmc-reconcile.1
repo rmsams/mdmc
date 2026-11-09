@@ -1,0 +1,16 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-reconcile 1  "reconcile " 
+.SH NAME
+mdmc\-reconcile \- Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+.SH SYNOPSIS
+\fBmdmc reconcile\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

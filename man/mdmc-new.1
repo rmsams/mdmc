@@ -1,0 +1,73 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-new 1  "new " 
+.SH NAME
+mdmc\-new \- Create a new email draft
+.SH SYNOPSIS
+\fBmdmc new\fR [\fB\-\-account\fR] [\fB\-\-config\fR] [\fB\-\-to\fR] [\fB\-\-cc\fR] [\fB\-\-bcc\fR] [\fB\-\-subject\fR] [\fB\-\-reply\fR] [\fB\-\-reply\-all\fR] [\fB\-\-forward\fR] [\fB\-\-forward\-attach\fR] [\fB\-\-attachments\fR] [\fB\-\-body\fR] [\fB\-\-format\fR] [\fB\-\-css\fR] [\fB\-\-template\fR] [\fB\-\-lua\-filter\fR] [\fB\-\-pandoc\-raw\fR] [\fB\-\-sign\fR] [\fB\-\-encrypt\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Create a new email draft
+.SH OPTIONS
+.TP
+\fB\-\-account\fR \fI<ACCOUNT>\fR
+Account name (default: [defaults].account in config)
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-to\fR \fI<TO>\fR
+Recipient(s), comma\-separated
+.TP
+\fB\-\-cc\fR \fI<CC>\fR
+CC recipient(s), comma\-separated
+.TP
+\fB\-\-bcc\fR \fI<BCC>\fR
+BCC recipient(s), comma\-separated
+.TP
+\fB\-\-subject\fR \fI<SUBJECT>\fR
+Email subject line
+.TP
+\fB\-\-reply\fR \fI<REPLY>\fR
+Message\-ID to reply to (sender only); not with \-\-to/\-\-cc
+.TP
+\fB\-\-reply\-all\fR \fI<REPLY_ALL>\fR
+Message\-ID to reply to all recipients; \-\-to/\-\-cc override the defaults
+.TP
+\fB\-\-forward\fR \fI<FORWARD>\fR
+Message\-ID of the message to forward (embedded as text at compile time)
+.TP
+\fB\-\-forward\-attach\fR \fI<FORWARD_ATTACH>\fR
+Message\-ID of the message to forward as a message/rfc822 attachment
+.TP
+\fB\-\-attachments\fR \fI<ATTACHMENTS>\fR
+Attachment file path(s)
+.TP
+\fB\-\-body\fR \fI<BODY>\fR
+Message body (markdown)
+.TP
+\fB\-\-format\fR \fI<FORMAT>\fR
+Body format: text (default), html, or plain
+.TP
+\fB\-\-css\fR \fI<CSS>\fR
+CSS theme name/path/URL (html only)
+.TP
+\fB\-\-template\fR \fI<TEMPLATE>\fR
+Pandoc template name or path
+.TP
+\fB\-\-lua\-filter\fR \fI<LUA_FILTER>\fR
+Pandoc lua\-filter name or path
+.TP
+\fB\-\-pandoc\-raw\fR
+Use vanilla pandoc (no template/filter/css)
+.TP
+\fB\-\-sign\fR
+Sign the message with the account\*(Aqs signing key
+.TP
+\fB\-\-encrypt\fR
+Encrypt the message to the recipients
+.TP
+\fB\-\-editor\fR
+Open $EDITOR on the draft after writing
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

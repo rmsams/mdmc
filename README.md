@@ -36,6 +36,9 @@ Or build the Nix package from the flake:
 nix build
 ```
 
+Man pages for every command and subcommand are installed to
+`share/man/man1/` (`man mdmc`, `man mdmc-new`, `man mdmc-list-msgs`, …).
+
 For development, use devenv. The shell is wired to a purely local environment —
 it never touches `~/.config/mdmc` or `~/Mail`. `dev-setup` copies the committed
 `dev/` fixtures (a fake maildir, a sample draft, and a config) into `.dev-state/`

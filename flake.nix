@@ -15,9 +15,12 @@
         version = cargoToml.package.version;
         src = ./.;
         cargoLock = { lockFile = ./Cargo.lock; };
-        nativeBuildInputs = [ pkgs.pkg-config ];
+        nativeBuildInputs = [ pkgs.pkg-config pkgs.installShellFiles ];
         buildInputs = [ pkgs.sqlite ];
         doCheck = false;
+        postInstall = ''
+          installManPage man/*.1
+        '';
       };
     in
     {

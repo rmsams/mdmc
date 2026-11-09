@@ -1,0 +1,31 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-pick-addr 1  "addr " 
+.SH NAME
+mdmc\-pick\-addr \- Pick an address and print `Name <email>`
+.SH SYNOPSIS
+\fBmdmc pick addr\fR [\fB\-\-config\fR] [\fB\-\-folders\fR] [\fB\-\-last\fR] [\fB\-\-multi\fR] [\fB\-\-lines\fR] [\fB\-\-page\-size\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Pick an address and print `Name <email>`
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-folders\fR \fI<FOLDERS>\fR
+Filter to these folders (comma\-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
+.TP
+\fB\-\-last\fR \fI<LAST>\fR
+Only consider addresses seen in the last N days (default 0 = all)
+.TP
+\fB\-\-multi\fR
+Allow selecting multiple addresses
+.TP
+\fB\-\-lines\fR
+Print multiple selections one per line instead of comma\-separated
+.TP
+\fB\-\-page\-size\fR \fI<PAGE_SIZE>\fR
+Number of picker rows to show (default: [lookup] page_size)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

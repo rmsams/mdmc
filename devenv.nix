@@ -24,6 +24,7 @@
   scripts.dev-teardown.exec = "rm -rf \"${config.devenv.root}/.dev-state\"";
 
   enterShell = ''
+    export MANPATH="${config.devenv.root}/man:''${MANPATH:-}"
     if [ ! -f "${config.devenv.root}/.dev-state/mdmc.toml" ]; then
       echo "mdmc — dev environment not set up; run 'dev-setup'"
     else

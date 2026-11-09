@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-decompile 1  "decompile " 
+.SH NAME
+mdmc\-decompile \- Decompile a message to a markdown snapshot note
+.SH SYNOPSIS
+\fBmdmc decompile\fR [\fB\-\-config\fR] [\fB\-\-stdout\fR] [\fB\-\-link\-attachments\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
+.SH DESCRIPTION
+Decompile a message to a markdown snapshot note
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-\-stdout\fR
+Print the note to stdout instead of writing to [paths] snapshots
+.TP
+\fB\-\-link\-attachments\fR
+Append an `## Attachments` section listing extracted files
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIINPUT\fR>
+Message\-ID, a raw message file path, or `\-` for stdin

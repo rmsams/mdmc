@@ -1,0 +1,16 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-config 1  "config " 
+.SH NAME
+mdmc\-config \- Print the effective (merged, resolved) config as TOML
+.SH SYNOPSIS
+\fBmdmc config\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Print the effective (merged, resolved) config as TOML
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
