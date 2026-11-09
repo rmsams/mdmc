@@ -107,8 +107,8 @@ List drafts, snapshots, messages, or addresses to stdout:
 ```sh
 mdmc list drafts               # draft file paths
 mdmc list snapshots            # snapshot file paths
-mdmc list msgs                 # message-ids (--from, --last filters)
-mdmc list addr                 # `Name <email>` (--last filter)
+mdmc list msgs                 # message-ids (--folders, --from, --last filters)
+mdmc list addr                 # `Name <email>` (--folders, --last filters)
 ```
 
 Or interactively pick one (or several with `--multi`) from the same four
@@ -121,9 +121,11 @@ mdmc pick msgs
 mdmc pick addr
 ```
 
-Both `list` and `pick` support `--json` for structured output, and `pick
---multi` prints selections comma-separated by default (or one per line with
-`--lines`).
+`msgs` and `addr` take `--folders` to filter to a union of folders
+(comma-separated): a `[folders]` name, `drafts`/`sent` (every account's),
+or `<account>.drafts`/`<account>.sent`. Both `list` and `pick` support
+`--json` for structured output, and `pick --multi` prints selections
+comma-separated by default (or one per line with `--lines`).
 
 Print the effective (merged, resolved) config as TOML:
 

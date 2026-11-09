@@ -180,19 +180,39 @@ fn write_rows(db: &Path, rows: &[Row]) -> Result<(), String> {
 }
 
 /// `(address, name)` pairs ordered by most recent, deduplicated by address.
-pub fn addresses(db: &Path, since: i64) -> Result<Vec<(String, String)>, String> {
+/// `folders` restricts to messages whose path is under one of the given
+/// directory prefixes.
+pub fn addresses(
+    db: &Path,
+    since: i64,
+    folders: &[String],
+) -> Result<Vec<(String, String)>, String> {
     let conn = open(db)?;
+    let prefixes: Vec<String> = folders.iter().map(|f| format!("{f}/")).collect();
+
+    let mut sql = String::from(
+        "SELECT from_addr, from_name, MAX(date) AS last_seen
+         FROM messages
+         WHERE date >= ?1 AND from_addr != ''",
+    );
+    if !folders.is_empty() {
+        let conds: Vec<String> = (0..folders.len())
+            .map(|i| format!("instr(path, ?{}) = 1", i + 2))
+            .collect();
+        sql.push_str(&format!(" AND ({})", conds.join(" OR ")));
+    }
+    sql.push_str(" GROUP BY from_addr ORDER BY last_seen DESC");
+
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&since];
+    for p in &prefixes {
+        params.push(p);
+    }
+
     let mut stmt = conn
-        .prepare(
-            "SELECT from_addr, from_name, MAX(date) AS last_seen
-             FROM messages
-             WHERE date >= ?1 AND from_addr != ''
-             GROUP BY from_addr
-             ORDER BY last_seen DESC",
-        )
+        .prepare(&sql)
         .map_err(|e| format!("cannot prepare address query: {e}"))?;
     let rows = stmt
-        .query_map([since], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_map(params.as_slice(), |r| Ok((r.get(0)?, r.get(1)?)))
         .map_err(|e| format!("cannot query addresses: {e}"))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("cannot query addresses: {e}"))?;
@@ -209,21 +229,42 @@ pub struct MessageRow {
 }
 
 /// Messages ordered by most recent, optionally filtered by a `from` substring
-/// matched against name or address.
-pub fn messages(db: &Path, since: i64, from: Option<&str>) -> Result<Vec<MessageRow>, String> {
+/// matched against name or address, and by `folders` (directory prefixes).
+pub fn messages(
+    db: &Path,
+    since: i64,
+    from: Option<&str>,
+    folders: &[String],
+) -> Result<Vec<MessageRow>, String> {
     let conn = open(db)?;
+    let from_owned = from.map(str::to_string);
+    let prefixes: Vec<String> = folders.iter().map(|f| format!("{f}/")).collect();
+
+    let mut sql = String::from(
+        "SELECT message_id, from_name, from_addr, subject, date
+         FROM messages
+         WHERE date >= ?1
+           AND (?2 IS NULL OR instr(lower(from_name), lower(?2)) > 0
+                OR instr(lower(from_addr), lower(?2)) > 0)",
+    );
+    if !folders.is_empty() {
+        let conds: Vec<String> = (0..folders.len())
+            .map(|i| format!("instr(path, ?{}) = 1", i + 3))
+            .collect();
+        sql.push_str(&format!(" AND ({})", conds.join(" OR ")));
+    }
+    sql.push_str(" ORDER BY date DESC");
+
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&since, &from_owned];
+    for p in &prefixes {
+        params.push(p);
+    }
+
     let mut stmt = conn
-        .prepare(
-            "SELECT message_id, from_name, from_addr, subject, date
-             FROM messages
-             WHERE date >= ?1
-               AND (?2 IS NULL OR instr(lower(from_name), lower(?2)) > 0
-                    OR instr(lower(from_addr), lower(?2)) > 0)
-             ORDER BY date DESC",
-        )
+        .prepare(&sql)
         .map_err(|e| format!("cannot prepare message query: {e}"))?;
     let rows = stmt
-        .query_map(rusqlite::params![since, from], |r| {
+        .query_map(params.as_slice(), |r| {
             Ok(MessageRow {
                 message_id: r.get(0)?,
                 from_name: r.get(1)?,
@@ -316,15 +357,15 @@ mod tests {
         let n = build_with("*", &db, script.to_str().unwrap()).unwrap();
         assert_eq!(n, 2);
 
-        let addrs = addresses(&db, 0).unwrap();
+        let addrs = addresses(&db, 0, &[]).unwrap();
         assert_eq!(addrs.len(), 2);
         assert_eq!(addrs[0], ("bob@example.com".to_string(), "Bob".to_string()));
 
-        let msgs = messages(&db, 0, None).unwrap();
+        let msgs = messages(&db, 0, None, &[]).unwrap();
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0].message_id, "two@x");
 
-        let filtered = messages(&db, 0, Some("ann")).unwrap();
+        let filtered = messages(&db, 0, Some("ann"), &[]).unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].message_id, "one@x");
 

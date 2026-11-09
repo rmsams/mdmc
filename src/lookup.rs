@@ -202,10 +202,10 @@ pub(crate) fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String
 }
 
 /// Load address rows from the index, most recent first.
-fn load_addrs(last: u32, cfg: &Config) -> Result<Vec<Addr>, String> {
+fn load_addrs(last: u32, folders: &[String], cfg: &Config) -> Result<Vec<Addr>, String> {
     let db = cfg.paths_index();
     require_index(&db)?;
-    let rows = crate::index::addresses(&db, since(last))?;
+    let rows = crate::index::addresses(&db, since(last), folders)?;
     Ok(rows
         .into_iter()
         .map(|(address, name)| Addr { name, address })
@@ -213,10 +213,15 @@ fn load_addrs(last: u32, cfg: &Config) -> Result<Vec<Addr>, String> {
 }
 
 /// Load message rows from the index, most recent first.
-fn load_msgs(from: Option<&str>, last: u32, cfg: &Config) -> Result<Vec<Msg>, String> {
+fn load_msgs(
+    from: Option<&str>,
+    last: u32,
+    folders: &[String],
+    cfg: &Config,
+) -> Result<Vec<Msg>, String> {
     let db = cfg.paths_index();
     require_index(&db)?;
-    let rows = crate::index::messages(&db, since(last), from)?;
+    let rows = crate::index::messages(&db, since(last), from, folders)?;
     Ok(build_msgs(rows))
 }
 
@@ -226,9 +231,10 @@ pub fn pick_addr(
     multi: bool,
     lines: bool,
     page_size: usize,
+    folders: &[String],
     cfg: &Config,
 ) -> Result<(), String> {
-    let addrs = load_addrs(last, cfg)?;
+    let addrs = load_addrs(last, folders, cfg)?;
     let chosen = if multi {
         pick_many("address", addrs, page_size)?
     } else {
@@ -238,8 +244,8 @@ pub fn pick_addr(
 }
 
 /// `list addr`: print addresses (`Name <email>`), or a JSON array with `--json`.
-pub fn list_addr(last: u32, json: bool, cfg: &Config) -> Result<(), String> {
-    let addrs = load_addrs(last, cfg)?;
+pub fn list_addr(last: u32, json: bool, folders: &[String], cfg: &Config) -> Result<(), String> {
+    let addrs = load_addrs(last, folders, cfg)?;
     if json {
         let out: Vec<serde_json::Value> = addrs
             .iter()
@@ -257,9 +263,10 @@ pub fn pick_msgs(
     multi: bool,
     lines: bool,
     page_size: usize,
+    folders: &[String],
     cfg: &Config,
 ) -> Result<(), String> {
-    let msgs = load_msgs(from, last, cfg)?;
+    let msgs = load_msgs(from, last, folders, cfg)?;
     let chosen = if multi {
         pick_many("message", msgs, page_size)?
     } else {
@@ -269,8 +276,14 @@ pub fn pick_msgs(
 }
 
 /// `list msgs`: print message-ids, or a JSON array with `--json`.
-pub fn list_msgs(from: Option<&str>, last: u32, json: bool, cfg: &Config) -> Result<(), String> {
-    let msgs = load_msgs(from, last, cfg)?;
+pub fn list_msgs(
+    from: Option<&str>,
+    last: u32,
+    json: bool,
+    folders: &[String],
+    cfg: &Config,
+) -> Result<(), String> {
+    let msgs = load_msgs(from, last, folders, cfg)?;
     if json {
         let out: Vec<serde_json::Value> = msgs
             .iter()

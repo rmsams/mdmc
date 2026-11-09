@@ -369,6 +369,47 @@ impl Config {
         expand_home(raw)
     }
 
+    /// Resolve `--folders` specs to absolute maildir paths. A spec is a
+    /// `[folders]` registry name (or literal path), `drafts`/`sent` (every
+    /// account's respective folder), or `<account>.drafts`/`<account>.sent`
+    /// (one account's folder).
+    pub fn resolve_folders(&self, specs: &[String]) -> Result<Vec<String>, String> {
+        let mut paths = Vec::new();
+        for spec in specs {
+            if let Some((account, qualifier)) = spec.split_once('.') {
+                let acct = self.resolve_account(account)?;
+                let path = match qualifier {
+                    "drafts" => acct.drafts.as_deref(),
+                    "sent" => acct.sent.as_deref(),
+                    other => {
+                        return Err(format!(
+                            "unknown folder qualifier '{other}' (expected drafts or sent)"
+                        ));
+                    }
+                };
+                match path {
+                    Some(p) => paths.push(p.to_string()),
+                    None => {
+                        return Err(format!(
+                            "account '{account}' has no '{qualifier}' folder configured"
+                        ));
+                    }
+                }
+                continue;
+            }
+            match spec.as_str() {
+                "drafts" => paths.extend(self.accounts.values().filter_map(|a| a.drafts.clone())),
+                "sent" => paths.extend(self.accounts.values().filter_map(|a| a.sent.clone())),
+                name => paths.push(
+                    self.resolve_target_folder(name)
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+            }
+        }
+        Ok(paths)
+    }
+
     /// Look up an account by name in `[accounts]`.
     pub fn resolve_account(&self, name: &str) -> Result<&Account, String> {
         self.accounts.get(name).ok_or_else(|| {
@@ -469,6 +510,54 @@ lua-filters = ["email"]
     fn resolve_account_missing_errors() {
         let cfg = Config::default();
         assert!(cfg.resolve_account("nope").is_err());
+    }
+
+    #[test]
+    fn resolve_folders_expands_drafts_sent_and_registry() {
+        let cfg = Config {
+            accounts: std::collections::BTreeMap::from([
+                (
+                    "a".to_string(),
+                    Account {
+                        drafts: Some("/mail/a/Drafts".to_string()),
+                        sent: Some("/mail/a/Sent".to_string()),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "b".to_string(),
+                    Account {
+                        drafts: Some("/mail/b/Drafts".to_string()),
+                        sent: Some("/mail/b/Sent".to_string()),
+                        ..Default::default()
+                    },
+                ),
+            ]),
+            folders: std::collections::BTreeMap::from([(
+                "refs".to_string(),
+                "/mail/refs".to_string(),
+            )]),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            cfg.resolve_folders(&["drafts".to_string()]).unwrap(),
+            vec!["/mail/a/Drafts".to_string(), "/mail/b/Drafts".to_string()]
+        );
+        assert_eq!(
+            cfg.resolve_folders(&["sent".to_string()]).unwrap(),
+            vec!["/mail/a/Sent".to_string(), "/mail/b/Sent".to_string()]
+        );
+        assert_eq!(
+            cfg.resolve_folders(&["a.sent".to_string()]).unwrap(),
+            vec!["/mail/a/Sent".to_string()]
+        );
+        assert_eq!(
+            cfg.resolve_folders(&["refs".to_string()]).unwrap(),
+            vec!["/mail/refs".to_string()]
+        );
+        assert!(cfg.resolve_folders(&["nope.drafts".to_string()]).is_err());
+        assert!(cfg.resolve_folders(&["a.nope".to_string()]).is_err());
     }
 
     #[test]

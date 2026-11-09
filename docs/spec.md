@@ -126,14 +126,18 @@ batch — rebuild with `mdmc index` after syncing.
 `mdmc list msgs`/`list addr` and `mdmc pick msgs`/`pick addr` query this index
 (never notmuch, so the slow address enumeration is off the interactive path):
 
-- `mdmc pick addr [--last N] [--multi] [--lines] [--page-size N]` picks an
-  address and prints `Name <email>`; addresses are deduplicated by address,
-  most recent first.
-- `mdmc pick msgs [--from A] [--last N] [--multi] [--lines] [--page-size N]`
-  picks a message (displayed as aligned `sender | datetime | subject` columns)
-  and prints its message-id.
-- `mdmc list addr [--last N] [--json]` and `mdmc list msgs [--from A] [--last N]
-  [--json]` print all matches to stdout instead of opening a picker.
+- `mdmc pick addr [--folders F] [--last N] [--multi] [--lines] [--page-size N]`
+  picks an address and prints `Name <email>`; addresses are deduplicated by
+  address, most recent first.
+- `mdmc pick msgs [--folders F] [--from A] [--last N] [--multi] [--lines]
+  [--page-size N]` picks a message (displayed as aligned
+  `sender | datetime | subject` columns) and prints its message-id.
+- `mdmc list addr [--folders F] [--last N] [--json]` and
+  `mdmc list msgs [--folders F] [--from A] [--last N] [--json]` print all
+  matches to stdout instead of opening a picker.
+- `--folders F` filters to a union of folders (comma-separated, logical OR): a
+  `[folders]` name, `drafts`/`sent` (every account's respective folder), or
+  `<account>.drafts`/`<account>.sent` (one account's folder).
 - `--last N` bounds by recency (`msgs` defaults to 30 days, `addr` to 0 = all);
   `--from` is a case-insensitive substring on the sender's name or address.
   Pickers emit multiple selections comma-separated by default, or one per line

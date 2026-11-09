@@ -168,6 +168,9 @@ enum ListDomain {
     },
     /// List message-ids
     Msgs {
+        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
+        #[arg(long, value_delimiter = ',')]
+        folders: Vec<String>,
         /// Restrict to messages whose sender matches this substring
         #[arg(long)]
         from: Option<String>,
@@ -180,6 +183,9 @@ enum ListDomain {
     },
     /// List addresses
     Addr {
+        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
+        #[arg(long, value_delimiter = ',')]
+        folders: Vec<String>,
         /// Only consider addresses seen in the last N days (default 0 = all)
         #[arg(long)]
         last: Option<u32>,
@@ -217,6 +223,9 @@ enum PickDomain {
     },
     /// Pick a message and print its message-id
     Msgs {
+        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
+        #[arg(long, value_delimiter = ',')]
+        folders: Vec<String>,
         /// Restrict to messages whose sender matches this substring
         #[arg(long)]
         from: Option<String>,
@@ -235,6 +244,9 @@ enum PickDomain {
     },
     /// Pick an address and print `Name <email>`
     Addr {
+        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
+        #[arg(long, value_delimiter = ',')]
+        folders: Vec<String>,
         /// Only consider addresses seen in the last N days (default 0 = all)
         #[arg(long)]
         last: Option<u32>,
@@ -330,15 +342,28 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
         Command::List { domain } => match domain {
             ListDomain::Drafts { json } => list::list_drafts(json, cfg),
             ListDomain::Snapshots { json } => list::list_snapshots(json, cfg),
-            ListDomain::Msgs { from, last, json } => lookup::list_msgs(
+            ListDomain::Msgs {
+                folders,
+                from,
+                last,
+                json,
+            } => lookup::list_msgs(
                 from.as_deref(),
                 last.unwrap_or_else(|| cfg.msgs_last()),
                 json,
+                &cfg.resolve_folders(&folders)?,
                 cfg,
             ),
-            ListDomain::Addr { last, json } => {
-                lookup::list_addr(last.unwrap_or_else(|| cfg.addr_last()), json, cfg)
-            }
+            ListDomain::Addr {
+                folders,
+                last,
+                json,
+            } => lookup::list_addr(
+                last.unwrap_or_else(|| cfg.addr_last()),
+                json,
+                &cfg.resolve_folders(&folders)?,
+                cfg,
+            ),
         },
         Command::Pick { domain } => match domain {
             PickDomain::Drafts {
@@ -362,6 +387,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 cfg,
             ),
             PickDomain::Msgs {
+                folders,
                 from,
                 last,
                 multi,
@@ -373,9 +399,11 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 multi,
                 lines,
                 page_size.unwrap_or_else(|| cfg.page_size()),
+                &cfg.resolve_folders(&folders)?,
                 cfg,
             ),
             PickDomain::Addr {
+                folders,
                 last,
                 multi,
                 lines,
@@ -385,6 +413,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 multi,
                 lines,
                 page_size.unwrap_or_else(|| cfg.page_size()),
+                &cfg.resolve_folders(&folders)?,
                 cfg,
             ),
         },
