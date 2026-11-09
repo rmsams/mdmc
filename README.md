@@ -62,13 +62,15 @@ Reply to a message by Message-ID — the original is resolved from the maildir
 tree and the envelope is auto-filled (sender in `to`, `Re:`-prefixed subject):
 
 ```sh
-mdmc new --account rmsams-gmail --in-reply-to 20260101.123456.abc@x1g11
-mdmc new --account rmsams-gmail --in-reply-to 20260101.123456.abc@x1g11 --reply-all
+mdmc new --account rmsams-gmail --reply 20260101.123456.abc@x1g11
+mdmc new --account rmsams-gmail --reply-all 20260101.123456.abc@x1g11
 ```
 
-`--reply-all` also fills `cc` with the original recipients (minus the sender and
-your own address). An explicit `--to`/`--cc`/`--subject` overrides the
-auto-filled value.
+`--reply` addresses the sender only (and refuses `--to`/`--cc`); `--reply-all`
+also fills `cc` with the original recipients (minus the sender and your own
+address). With `--reply-all`, an explicit `--to`/`--cc` overrides the
+auto-filled value, and `--subject` overrides the auto-filled value in either
+mode.
 
 Open an existing draft in `$EDITOR` — by slug, path, or Message-ID, or an
 interactive picker when given no argument (sent drafts excluded unless `--all`).

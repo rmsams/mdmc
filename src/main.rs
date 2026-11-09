@@ -57,12 +57,12 @@ enum Command {
         /// Email subject line
         #[arg(long)]
         subject: Option<String>,
-        /// Message-ID being replied to
-        #[arg(long)]
-        in_reply_to: Option<String>,
-        /// Reply to all recipients (sender + original To/Cc) instead of sender only
-        #[arg(long)]
-        reply_all: bool,
+        /// Message-ID to reply to (sender only); not with --to/--cc
+        #[arg(long, conflicts_with = "reply_all")]
+        reply: Option<String>,
+        /// Message-ID to reply to all recipients; --to/--cc override the defaults
+        #[arg(long, conflicts_with = "reply")]
+        reply_all: Option<String>,
         /// Attachment file path(s)
         #[arg(long)]
         attachments: Vec<String>,
@@ -220,7 +220,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             cc,
             bcc,
             subject,
-            in_reply_to,
+            reply,
             reply_all,
             attachments,
             body,
@@ -239,7 +239,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             cc,
             bcc,
             subject,
-            in_reply_to,
+            reply,
             reply_all,
             attachments,
             body,

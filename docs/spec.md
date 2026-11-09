@@ -7,7 +7,8 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 
 `mdmc new` creates a draft (frontmatter + markdown body) under
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
-shipped schema, and optionally opens `$EDITOR`. With `--in-reply-to <id>`, it
+shipped schema, and optionally opens `$EDITOR`. With `--reply <id>` or
+`--reply-all <id>`, it
 resolves the original message and auto-fills the envelope (see Reply). `mdmc edit` opens an existing
 draft in `$EDITOR` (an interactive picker when given no argument). `mdmc compile`
 compiles a draft to RFC 5322 and delivers it, refusing a draft already marked
@@ -103,17 +104,18 @@ angle-bracket-insensitive, matching mdmc's bracket-stripped ids.
 
 ## Reply
 
-`mdmc new --in-reply-to <id>` resolves the original message by the same lookup
+`mdmc new --reply <id>` resolves the original message by the same lookup
 `decompile` uses (a missing `paths.mail`, a Message-ID that cannot be
 found, or an unparseable message is a hard error) and auto-fills the envelope.
 
 The sender is the first `Reply-To` mailbox, falling back to the first `From`
-mailbox (a message with neither is an error). By default the reply goes to the
-sender alone (`to`); `--reply-all` additionally fills `cc` with every original
-`To`/`Cc` mailbox, minus the sender and minus the account's own `from` address.
-The subject is prefixed with `Re: ` unless it already has the prefix. Explicit
-`--to`/`--cc`/`--subject` flags override the auto-filled values. The
-`in-reply-to` and `quote: auto` fields are always written.
+mailbox (a message with neither is an error). `--reply` addresses the sender
+alone (`to`) and refuses `--to`/`--cc` (but not `--bcc`); `--reply-all <id>`
+additionally fills `cc` with every original `To`/`Cc` mailbox, minus the sender
+and minus the account's own `from` address, and allows `--to`/`--cc` to override
+the auto-filled values. The subject is prefixed with `Re: ` unless it already
+has the prefix; an explicit `--subject` overrides it. The `in-reply-to` and
+`quote: auto` fields are always written.
 
 ## Lookup index
 

@@ -81,8 +81,8 @@ pub fn new(
     cc: Option<String>,
     bcc: Option<String>,
     subject: Option<String>,
-    in_reply_to: Option<String>,
-    reply_all: bool,
+    reply: Option<String>,
+    reply_all: Option<String>,
     attachments: Vec<String>,
     body: Option<String>,
     format: Option<String>,
@@ -99,9 +99,13 @@ pub fn new(
             return Err("--format must be one of text, html, plain.".into());
         }
     }
-    if reply_all && in_reply_to.is_none() {
-        return Err("--reply-all requires --in-reply-to.".into());
+    if reply.is_some() && (to.is_some() || cc.is_some()) {
+        return Err(
+            "--reply cannot be combined with --to or --cc (use --reply-all to override)".into(),
+        );
     }
+    let reply_all_mode = reply_all.is_some();
+    let in_reply_to = reply.or(reply_all);
 
     let drafts_dir = cfg.paths_source()?;
 
@@ -119,7 +123,7 @@ pub fn new(
         Some(irt) => {
             let mail_root = cfg.paths_mail()?;
             let message = crate::reply::resolve(irt, &mail_root)?;
-            let env = crate::reply::envelope(&message, &self_addr, reply_all)?;
+            let env = crate::reply::envelope(&message, &self_addr, reply_all_mode)?;
             (env.to, env.cc, env.subject)
         }
         None => (Vec::new(), Vec::new(), None),
@@ -300,10 +304,11 @@ mod tests {
 
     fn run_new(
         cfg: &Config,
-        in_reply_to: Option<&str>,
-        reply_all: bool,
+        reply: Option<&str>,
+        reply_all: Option<&str>,
         to: Option<&str>,
         cc: Option<&str>,
+        bcc: Option<&str>,
         subject: Option<&str>,
     ) -> Result<(), String> {
         new(
@@ -311,10 +316,10 @@ mod tests {
             Some("test".to_string()),
             to.map(str::to_string),
             cc.map(str::to_string),
-            None,
+            bcc.map(str::to_string),
             subject.map(str::to_string),
-            in_reply_to.map(str::to_string),
-            reply_all,
+            reply.map(str::to_string),
+            reply_all.map(str::to_string),
             Vec::new(),
             None,
             None,
@@ -331,7 +336,7 @@ mod tests {
     #[test]
     fn new_reply_fills_envelope() {
         let (dir, cfg, source) = setup_maildir();
-        run_new(&cfg, Some("m1@example.com"), false, None, None, None).unwrap();
+        run_new(&cfg, Some("m1@example.com"), None, None, None, None, None).unwrap();
 
         let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
         assert!(text.contains("subject: 'Re: Lunch'\n"));
@@ -346,7 +351,7 @@ mod tests {
     #[test]
     fn new_reply_all_fills_cc_and_excludes_self() {
         let (dir, cfg, source) = setup_maildir();
-        run_new(&cfg, Some("m1@example.com"), true, None, None, None).unwrap();
+        run_new(&cfg, None, Some("m1@example.com"), None, None, None, None).unwrap();
 
         let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
         assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
@@ -357,14 +362,15 @@ mod tests {
     }
 
     #[test]
-    fn new_reply_respects_explicit_flags() {
+    fn new_reply_all_overrides_to_and_cc() {
         let (dir, cfg, source) = setup_maildir();
         run_new(
             &cfg,
+            None,
             Some("m1@example.com"),
-            true,
             Some("override@example.com"),
             Some("override-cc@example.com"),
+            None,
             Some("My subject"),
         )
         .unwrap();
@@ -382,18 +388,68 @@ mod tests {
     #[test]
     fn new_reply_errors_when_message_missing() {
         let (dir, cfg, _source) = setup_maildir();
-        let err = run_new(&cfg, Some("missing@example.com"), false, None, None, None).unwrap_err();
+        let err = run_new(
+            &cfg,
+            Some("missing@example.com"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
         assert!(err.contains("not found"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
-    fn new_reply_all_requires_in_reply_to() {
+    fn new_reply_errors_with_to_or_cc() {
+        let (dir, cfg, _source) = setup_maildir();
+        let err = run_new(
+            &cfg,
+            Some("m1@example.com"),
+            None,
+            Some("a@b.c"),
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--reply cannot be combined with --to or --cc"));
+
+        let err = run_new(
+            &cfg,
+            Some("m1@example.com"),
+            None,
+            None,
+            Some("a@b.c"),
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(err.contains("--reply cannot be combined with --to or --cc"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_allows_bcc() {
         let (dir, cfg, source) = setup_maildir();
-        let err = run_new(&cfg, None, true, None, None, None).unwrap_err();
-        assert!(err.contains("--reply-all requires --in-reply-to"));
-        assert!(!source.join("draft.md").exists());
+        run_new(
+            &cfg,
+            Some("m1@example.com"),
+            None,
+            None,
+            None,
+            Some("bcc@example.com"),
+            None,
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
+        assert!(text.contains("bcc:\n  - bcc@example.com\n"));
+        assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
