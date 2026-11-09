@@ -36,10 +36,18 @@ Or build the Nix package from the flake:
 nix build
 ```
 
-For development, use devenv:
+For development, use devenv. The shell is wired to a purely local environment —
+it never touches `~/.config/mail` or `~/Mail`. `dev-setup` copies the committed
+`dev/` fixtures (a fake maildir, a sample draft, and a config) into `.dev-state/`
+(a git-ignored working copy), then indexes them with notmuch and mdmc, so tests
+mutate the copy, not the committed assets:
 
 ```sh
 devenv shell
+dev-setup      # populate .dev-state and build the indexes
+mdmc addr      # pick an address (`Name <email>`) from the index
+mdmc mid       # pick a message-id from the index
+dev-teardown   # wipe .dev-state to reset
 ```
 
 ## Usage

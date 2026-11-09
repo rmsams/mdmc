@@ -1,0 +1,22 @@
+[paths]
+source = "drafts"
+attachments = "attachments"
+mail = "mail"
+snapshots = "snapshots"
+index = "index.db"
+
+[accounts.dev]
+from = "dev@example.com"
+realname = "Dev Tester"
+drafts = "mail/acct/Drafts"
+sent = "mail/acct/Sent"
+
+[defaults]
+account = "dev"
+
+[index]
+query = "path:acct/**"
+
+[[editors]]
+name = "emacs"
+command = "emacsclient -t \"$@\""
