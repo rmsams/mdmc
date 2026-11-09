@@ -9,6 +9,7 @@
   packages = [
     pkgs.pandoc
     pkgs.notmuch
+    pkgs.sqlite
   ];
 
   # Point notmuch at the local dev database (built by `dev-setup`).
