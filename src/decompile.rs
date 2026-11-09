@@ -64,7 +64,7 @@ pub fn decompile(
         .map(|a| (disk_name(&message_id, &a.name), a.content_type.clone()))
         .collect();
 
-    let fields = build_fields(&message, &message_id, &all_attachments);
+    let fields = build_fields(&message, Some(&message_id), &all_attachments);
     let mut body_text = body;
     if list_attachments && !listed.is_empty() {
         body_text.push_str("\n## Attachments\n\n");
@@ -106,7 +106,7 @@ pub fn decompile(
     Ok(())
 }
 
-fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String> {
+pub(crate) fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String> {
     if input == "-" {
         let mut buf = Vec::new();
         std::io::stdin()
@@ -128,7 +128,10 @@ fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String> {
 /// `text/html` part converted with pandoc. Returns the rendered body and
 /// whether the HTML path was taken (so inline `cid:` images are known to be
 /// embedded).
-fn render_body(message: &Message, cid_map: &[(String, String)]) -> Result<(String, bool), String> {
+pub(crate) fn render_body(
+    message: &Message,
+    cid_map: &[(String, String)],
+) -> Result<(String, bool), String> {
     let has_text = message
         .text_body()
         .any(|p| matches!(p.kind(), PartKind::Text));
@@ -311,9 +314,9 @@ fn disk_name(message_id: &str, name: &str) -> String {
     format!("{message_id}--{}", sanitize_name(name))
 }
 
-fn build_fields(
+pub(crate) fn build_fields(
     message: &Message,
-    message_id: &str,
+    message_id: Option<&str>,
     attachments: &[(String, String)],
 ) -> Vec<(String, Field)> {
     let mut fields: Vec<(String, Field)> = Vec::new();
@@ -324,7 +327,9 @@ fn build_fields(
         .unwrap_or("(no subject)");
     fields.push(("title".to_string(), Field::Str(subject.to_string())));
     fields.push(("type".to_string(), Field::Str("mail-snapshot".to_string())));
-    fields.push(("message-id".to_string(), Field::Str(message_id.to_string())));
+    if let Some(message_id) = message_id {
+        fields.push(("message-id".to_string(), Field::Str(message_id.to_string())));
+    }
     if let Some(from) = message.from().and_then(|list| list.first()) {
         let s = format_mailbox(&from);
         if !s.is_empty() {

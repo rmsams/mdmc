@@ -122,6 +122,18 @@ notmuch show --format=raw id:20260101.123456.abc@x1g11 | mdmc decompile -
 `--stdout` prints the note instead of writing it to `paths.snapshots`, and
 `--link-attachments` appends an `## Attachments` section listing the extracted files.
 
+View a message as markdown on stdout — for reading in a terminal markdown
+renderer — with no attachment extraction and no `cid:` rewriting. By default it
+prints a full snapshot note (frontmatter + body); `--body-only` prints just a
+subject/meta header + body:
+
+```sh
+mdmc view 20260101.123456.abc@x1g11
+mdmc view ./raw.eml
+notmuch show --format=raw id:20260101.123456.abc@x1g11 | mdmc view -
+mdmc view 20260101.123456.abc@x1g11 --body-only | glow
+```
+
 None of these commands send. Sending is left to the tool that owns the
 delivery maildir, or to an SMTP client that reads RFC 5322 from standard input.
 For example, pipe the compiled message straight into msmtp:

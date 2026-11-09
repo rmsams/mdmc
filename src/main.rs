@@ -12,6 +12,7 @@ mod quote;
 mod reconcile;
 mod reply;
 mod util;
+mod view;
 
 use std::path::PathBuf;
 
@@ -141,6 +142,14 @@ enum Command {
     },
     /// Print the effective (merged, resolved) config as TOML. Never sends.
     Config,
+    /// Print a message as markdown to stdout (no attachment extraction). Never sends.
+    View {
+        /// Message-ID, a raw message file path, or `-` for stdin
+        input: String,
+        /// Print only a header + body, omitting the frontmatter
+        #[arg(long)]
+        body_only: bool,
+    },
 }
 
 fn main() {
@@ -212,6 +221,7 @@ fn main() {
             pick,
         } => list::list(snapshots, paths, pick, &cfg),
         Command::Config => cfg.to_toml().map(|s| println!("{s}")),
+        Command::View { input, body_only } => view::view(&input, body_only, &cfg),
     };
 
     if let Err(msg) = result {

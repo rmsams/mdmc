@@ -16,7 +16,10 @@ message-id is in the account's sent maildir. `mdmc list` prints draft rows as
 `status  slug` (colour-coded) or, with `--snapshots`, snapshot rows as
 `date  title` (most recent first); `--paths` prints file paths only and `--pick`
 opens a multi-select picker that prints the chosen paths. `mdmc decompile` turns
-a raw message back into a markdown snapshot note. `mdmc config` prints the
+a raw message back into a markdown snapshot note. `mdmc view` prints a message
+as markdown to stdout with no attachment extraction and no `cid:` rewriting:
+by default a full snapshot note (frontmatter + body), or, with `--body-only`,
+just a subject/meta header + body — a terminal-reader mode. `mdmc config` prints the
 effective (merged, resolved) config as TOML. None of them ever send.
 
 ## Decompile
@@ -235,9 +238,11 @@ construction, so it does not validate; the schema is for external validation
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
+- `maildir.rs` — Message-ID lookup by scanning maildirs (parallel, header-prefix reads).
 - `quote.rs` — reply quoting (maildir scan + `mail-parser`).
 - `reply.rs` — reply envelope resolution (recipients + subject).
 - `util.rs` — hostname and Message-ID generation.
+- `view.rs` — the `view` subcommand (markdown rendering to stdout).
 
 ## MML crate
 
