@@ -199,6 +199,9 @@ enum PickDomain {
         /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
         lines: bool,
+        /// Number of picker rows to show (default: [lookup] page_size)
+        #[arg(long = "page-size")]
+        page_size: Option<usize>,
     },
     /// Pick a snapshot and print its path
     Snapshots {
@@ -208,6 +211,9 @@ enum PickDomain {
         /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
         lines: bool,
+        /// Number of picker rows to show (default: [lookup] page_size)
+        #[arg(long = "page-size")]
+        page_size: Option<usize>,
     },
     /// Pick a message and print its message-id
     Msgs {
@@ -223,6 +229,9 @@ enum PickDomain {
         /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
         lines: bool,
+        /// Number of picker rows to show (default: [lookup] page_size)
+        #[arg(long = "page-size")]
+        page_size: Option<usize>,
     },
     /// Pick an address and print `Name <email>`
     Addr {
@@ -235,6 +244,9 @@ enum PickDomain {
         /// Print multiple selections one per line instead of comma-separated
         #[arg(long)]
         lines: bool,
+        /// Number of picker rows to show (default: [lookup] page_size)
+        #[arg(long = "page-size")]
+        page_size: Option<usize>,
     },
 }
 
@@ -318,23 +330,63 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
         Command::List { domain } => match domain {
             ListDomain::Drafts { json } => list::list_drafts(json, cfg),
             ListDomain::Snapshots { json } => list::list_snapshots(json, cfg),
-            ListDomain::Msgs { from, last, json } => {
-                lookup::list_msgs(from.as_deref(), last.unwrap_or(30), json, cfg)
+            ListDomain::Msgs { from, last, json } => lookup::list_msgs(
+                from.as_deref(),
+                last.unwrap_or_else(|| cfg.msgs_last()),
+                json,
+                cfg,
+            ),
+            ListDomain::Addr { last, json } => {
+                lookup::list_addr(last.unwrap_or_else(|| cfg.addr_last()), json, cfg)
             }
-            ListDomain::Addr { last, json } => lookup::list_addr(last.unwrap_or(0), json, cfg),
         },
         Command::Pick { domain } => match domain {
-            PickDomain::Drafts { multi, lines } => list::pick_drafts(multi, lines, cfg),
-            PickDomain::Snapshots { multi, lines } => list::pick_snapshots(multi, lines, cfg),
+            PickDomain::Drafts {
+                multi,
+                lines,
+                page_size,
+            } => list::pick_drafts(
+                multi,
+                lines,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                cfg,
+            ),
+            PickDomain::Snapshots {
+                multi,
+                lines,
+                page_size,
+            } => list::pick_snapshots(
+                multi,
+                lines,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                cfg,
+            ),
             PickDomain::Msgs {
                 from,
                 last,
                 multi,
                 lines,
-            } => lookup::pick_msgs(from.as_deref(), last.unwrap_or(30), multi, lines, cfg),
-            PickDomain::Addr { last, multi, lines } => {
-                lookup::pick_addr(last.unwrap_or(0), multi, lines, cfg)
-            }
+                page_size,
+            } => lookup::pick_msgs(
+                from.as_deref(),
+                last.unwrap_or_else(|| cfg.msgs_last()),
+                multi,
+                lines,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                cfg,
+            ),
+            PickDomain::Addr {
+                last,
+                multi,
+                lines,
+                page_size,
+            } => lookup::pick_addr(
+                last.unwrap_or_else(|| cfg.addr_last()),
+                multi,
+                lines,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                cfg,
+            ),
         },
     }
 }

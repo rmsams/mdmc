@@ -98,6 +98,8 @@ pub struct Config {
     pub editors: Vec<Editor>,
     #[serde(default, skip_serializing_if = "Index::is_empty")]
     pub index: Index,
+    #[serde(default, skip_serializing_if = "Lookup::is_empty")]
+    pub lookup: Lookup,
 }
 
 /// The lookup-index section: the notmuch query scoping which folders are
@@ -110,6 +112,21 @@ pub struct Index {
 impl Index {
     fn is_empty(&self) -> bool {
         self.query.is_none()
+    }
+}
+
+/// Defaults for the `list`/`pick` lookup commands (picker page size and the
+/// `--last` recency bounds).
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct Lookup {
+    pub page_size: Option<usize>,
+    pub msgs_last: Option<u32>,
+    pub addr_last: Option<u32>,
+}
+
+impl Lookup {
+    fn is_empty(&self) -> bool {
+        self.page_size.is_none() && self.msgs_last.is_none() && self.addr_last.is_none()
     }
 }
 
@@ -243,6 +260,11 @@ impl Config {
             index: Index {
                 query: local.index.query.or(global.index.query),
             },
+            lookup: Lookup {
+                page_size: local.lookup.page_size.or(global.lookup.page_size),
+                msgs_last: local.lookup.msgs_last.or(global.lookup.msgs_last),
+                addr_last: local.lookup.addr_last.or(global.lookup.addr_last),
+            },
         }
     }
 
@@ -308,6 +330,21 @@ impl Config {
         self.index.query.as_deref().ok_or_else(|| {
             "[index] query is required (the notmuch query scoping the index)".to_string()
         })
+    }
+
+    /// The picker page size (`[lookup] page_size`, default 7).
+    pub fn page_size(&self) -> usize {
+        self.lookup.page_size.unwrap_or(7)
+    }
+
+    /// The default `--last` for `list`/`pick msgs` (`[lookup] msgs_last`, default 30).
+    pub fn msgs_last(&self) -> u32 {
+        self.lookup.msgs_last.unwrap_or(30)
+    }
+
+    /// The default `--last` for `list`/`pick addr` (`[lookup] addr_last`, default 0).
+    pub fn addr_last(&self) -> u32 {
+        self.lookup.addr_last.unwrap_or(0)
     }
 
     pub fn default_account(&self) -> Option<&str> {

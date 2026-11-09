@@ -191,6 +191,14 @@ encrypt_to = "0x12A96FA9"            # optional; defaults to signing_key
 [folders]
 refs = "~/Mail/example/Reference"
 
+[index]
+query = "path:**"                    # notmuch scope for `mdmc index`
+
+[lookup]
+page_size = 7                        # picker rows (default 7)
+msgs_last = 30                       # default --last for msgs (default 30)
+addr_last = 0                        # default --last for addr (default 0 = all)
+
 [defaults]
 account = "rmsams-gmail"
 css = "email"                        # name or path; html only

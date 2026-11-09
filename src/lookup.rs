@@ -148,22 +148,32 @@ fn require_index(db: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn pick_one<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
+pub(crate) fn pick_one<T: fmt::Display>(
+    prompt: &str,
+    options: Vec<T>,
+    page_size: usize,
+) -> Result<Vec<T>, String> {
     if options.is_empty() {
         return Err("no matches".to_string());
     }
     let selected = inquire::Select::new(prompt, options)
+        .with_page_size(page_size)
         .raw_prompt()
         .map(|op| op.value)
         .map_err(|e| format!("picker failed: {e}"))?;
     Ok(vec![selected])
 }
 
-pub(crate) fn pick_many<T: fmt::Display>(prompt: &str, options: Vec<T>) -> Result<Vec<T>, String> {
+pub(crate) fn pick_many<T: fmt::Display>(
+    prompt: &str,
+    options: Vec<T>,
+    page_size: usize,
+) -> Result<Vec<T>, String> {
     if options.is_empty() {
         return Err("no matches".to_string());
     }
     let selected = inquire::MultiSelect::new(prompt, options)
+        .with_page_size(page_size)
         .raw_prompt()
         .map(|ops| ops.into_iter().map(|op| op.value).collect())
         .map_err(|e| format!("picker failed: {e}"))?;
@@ -211,12 +221,18 @@ fn load_msgs(from: Option<&str>, last: u32, cfg: &Config) -> Result<Vec<Msg>, St
 }
 
 /// `pick addr`: pick an address and print `Name <email>`.
-pub fn pick_addr(last: u32, multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+pub fn pick_addr(
+    last: u32,
+    multi: bool,
+    lines: bool,
+    page_size: usize,
+    cfg: &Config,
+) -> Result<(), String> {
     let addrs = load_addrs(last, cfg)?;
     let chosen = if multi {
-        pick_many("address", addrs)?
+        pick_many("address", addrs, page_size)?
     } else {
-        pick_one("address", addrs)?
+        pick_one("address", addrs, page_size)?
     };
     emit_values(chosen.into_iter().map(|a| a.name_addr()).collect(), lines)
 }
@@ -240,13 +256,14 @@ pub fn pick_msgs(
     last: u32,
     multi: bool,
     lines: bool,
+    page_size: usize,
     cfg: &Config,
 ) -> Result<(), String> {
     let msgs = load_msgs(from, last, cfg)?;
     let chosen = if multi {
-        pick_many("message", msgs)?
+        pick_many("message", msgs, page_size)?
     } else {
-        pick_one("message", msgs)?
+        pick_one("message", msgs, page_size)?
     };
     emit_values(chosen.into_iter().map(|m| m.id).collect(), lines)
 }

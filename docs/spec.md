@@ -126,18 +126,21 @@ batch — rebuild with `mdmc index` after syncing.
 `mdmc list msgs`/`list addr` and `mdmc pick msgs`/`pick addr` query this index
 (never notmuch, so the slow address enumeration is off the interactive path):
 
-- `mdmc pick addr [--last N] [--multi] [--lines]` picks an address and prints
-  `Name <email>`; addresses are deduplicated by address, most recent first.
-- `mdmc pick msgs [--from A] [--last N] [--multi] [--lines]` picks a message
-  (displayed as aligned `sender | datetime | subject` columns) and prints its
-  message-id.
+- `mdmc pick addr [--last N] [--multi] [--lines] [--page-size N]` picks an
+  address and prints `Name <email>`; addresses are deduplicated by address,
+  most recent first.
+- `mdmc pick msgs [--from A] [--last N] [--multi] [--lines] [--page-size N]`
+  picks a message (displayed as aligned `sender | datetime | subject` columns)
+  and prints its message-id.
 - `mdmc list addr [--last N] [--json]` and `mdmc list msgs [--from A] [--last N]
   [--json]` print all matches to stdout instead of opening a picker.
-- `--last N` bounds by recency (default 30 days; `0` lifts the bound); `--from`
-  is a case-insensitive substring on the sender's name or address. Pickers emit
-  multiple selections comma-separated by default, or one per line with
-  `--lines`; `list` emits one value per line and `--json` emits a JSON array.
-  Missing index is a hard error ("run `mdmc index` first").
+- `--last N` bounds by recency (`msgs` defaults to 30 days, `addr` to 0 = all);
+  `--from` is a case-insensitive substring on the sender's name or address.
+  Pickers emit multiple selections comma-separated by default, or one per line
+  with `--lines`; `list` emits one value per line and `--json` emits a JSON
+  array. Missing index is a hard error ("run `mdmc index` first").
+- The `[lookup]` section sets the defaults: `page_size` (picker rows, default
+  7), `msgs_last`, and `addr_last`; `--page-size`/`--last` override them.
 
 Selection is composable: `mdmc view "$(mdmc pick msgs)"` and
 `mdmc decompile "$(mdmc pick msgs)"`.
@@ -183,6 +186,11 @@ refs = "~/Mail/rmsams-gmail.com/Reference"
 
 [index]
 query = "path:rmsams-gmail.com/** or path:rs-clearmatics.com/** or path:services/**"  # notmuch scope for `mdmc index`
+
+[lookup]
+page_size = 7    # picker rows (default 7)
+msgs_last = 30   # default --last for list/pick msgs (default 30)
+addr_last = 0    # default --last for list/pick addr (default 0 = all)
 
 [defaults]
 css = "email"
@@ -274,7 +282,7 @@ construction, so it does not validate; the schema is for external validation
 ## Module map
 
 - `addr.rs` — mailbox/address-list formatting helpers.
-- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[index]` resolution.
+- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[index]`/`[lookup]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
 - `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).

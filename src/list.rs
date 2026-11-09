@@ -84,25 +84,30 @@ fn emit_paths(entries: Vec<Entry>, lines: bool) -> Result<(), String> {
 }
 
 /// `pick drafts`: pick a draft and print its path.
-pub fn pick_drafts(multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+pub fn pick_drafts(multi: bool, lines: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
     let dir = cfg.paths_source()?;
     let entries = collect_entries(&dir, false);
     let chosen = if multi {
-        crate::lookup::pick_many("draft", entries)?
+        crate::lookup::pick_many("draft", entries, page_size)?
     } else {
-        crate::lookup::pick_one("draft", entries)?
+        crate::lookup::pick_one("draft", entries, page_size)?
     };
     emit_paths(chosen, lines)
 }
 
 /// `pick snapshots`: pick a snapshot and print its path.
-pub fn pick_snapshots(multi: bool, lines: bool, cfg: &Config) -> Result<(), String> {
+pub fn pick_snapshots(
+    multi: bool,
+    lines: bool,
+    page_size: usize,
+    cfg: &Config,
+) -> Result<(), String> {
     let dir = cfg.paths_snapshots()?;
     let entries = collect_entries(&dir, true);
     let chosen = if multi {
-        crate::lookup::pick_many("snapshot", entries)?
+        crate::lookup::pick_many("snapshot", entries, page_size)?
     } else {
-        crate::lookup::pick_one("snapshot", entries)?
+        crate::lookup::pick_one("snapshot", entries, page_size)?
     };
     emit_paths(chosen, lines)
 }
