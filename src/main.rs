@@ -270,7 +270,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
         Command::View { input, body_only } => view::view(&mid_arg(input, cfg)?, body_only, cfg),
         Command::Index => {
             let query = cfg.index_query()?;
-            let db = crate::index::db_path();
+            let db = cfg.paths_index();
             let n = crate::index::build(query, &db)?;
             println!("indexed {n} messages in {}", db.display());
             Ok(())

@@ -127,6 +127,7 @@ pub struct Paths {
     pub pandoc_data: Option<String>,
     pub mail: Option<String>,
     pub snapshots: Option<String>,
+    pub index: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -198,6 +199,9 @@ impl Config {
         if let Some(p) = &mut self.paths.snapshots {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
+        if let Some(p) = &mut self.paths.index {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
         for v in self.folders.values_mut() {
             *v = resolve_path(v, base).to_string_lossy().into_owned();
         }
@@ -221,6 +225,7 @@ impl Config {
                 pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
                 mail: local.paths.mail.or(global.paths.mail),
                 snapshots: local.paths.snapshots.or(global.paths.snapshots),
+                index: local.paths.index.or(global.paths.index),
             },
             folders: merge_map(local.folders, global.folders),
             defaults: Defaults {
@@ -281,6 +286,21 @@ impl Config {
             "[paths] snapshots is required (where decompiled notes live)".to_string()
         })?;
         Ok(expand_home(raw))
+    }
+
+    /// The lookup-index database path: `[paths] index` when set, else
+    /// `$XDG_DATA_HOME/mdmc/index.db` (falling back to `~/.local/share/mdmc`).
+    pub fn paths_index(&self) -> PathBuf {
+        if let Some(raw) = &self.paths.index {
+            return expand_home(raw);
+        }
+        let base = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share"))
+            })
+            .unwrap_or_else(|| PathBuf::from("."));
+        base.join("mdmc").join("index.db")
     }
 
     /// The notmuch query scoping the lookup index (required by `mdmc index`).

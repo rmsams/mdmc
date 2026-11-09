@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::Connection;
@@ -14,16 +14,6 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date);
 ";
-
-/// The default index path: `$XDG_DATA_HOME/mdmc/index.db`, falling back to
-/// `~/.local/share/mdmc/index.db`.
-pub fn db_path() -> PathBuf {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("mdmc").join("index.db")
-}
 
 struct Row {
     message_id: String,
@@ -214,6 +204,7 @@ pub fn messages(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn temp_db() -> (PathBuf, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("mdmc-index-{}", uuid::Uuid::new_v4()));

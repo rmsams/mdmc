@@ -117,11 +117,12 @@ The subject is prefixed with `Re: ` unless it already has the prefix. Explicit
 
 ## Lookup index
 
-`mdmc index` builds a local SQLite index (at `$XDG_DATA_HOME/mdmc/index.db`) of
+`mdmc index` builds a local SQLite index of
 message metadata scoped by the `[index] query` notmuch query: for each file
 matching the query it reads only the header block and stores the message-id,
-`From` name/address, subject, date, and path. It is a manual, periodic batch —
-rebuild with `mdmc index` after syncing.
+`From` name/address, subject, date, and path. The index lives at `[paths]
+index`, defaulting to `$XDG_DATA_HOME/mdmc/index.db`. It is a manual, periodic
+batch — rebuild with `mdmc index` after syncing.
 
 `mdmc addr` and `mdmc mid` query this index (never notmuch, so the slow
 address enumeration is off the interactive path):
@@ -168,6 +169,7 @@ attachments = "~/kb/attachments"     # bare-filename base for embeds and attachm
 pandoc_data = "~/.local/share/pandoc"
 mail = "~/Mail"                      # maildir root for Message-ID resolution
 snapshots = "~/kb/ops/mail/refs"     # decompiled snapshot notes
+index = "~/.local/share/mdmc/index.db"  # lookup-index db (defaults to XDG data dir)
 
 [accounts.rmsams-gmail]
 from = "rmsams@gmail.com"

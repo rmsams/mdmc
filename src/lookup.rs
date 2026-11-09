@@ -107,8 +107,8 @@ fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
 
 /// The `addr` command: pick an address (or print all matches) and write the
 /// chosen `Name <email>` value(s) to stdout.
-pub fn addr(last: u32, print: bool, multi: bool, json: bool, _cfg: &Config) -> Result<(), String> {
-    let db = crate::index::db_path();
+pub fn addr(last: u32, print: bool, multi: bool, json: bool, cfg: &Config) -> Result<(), String> {
+    let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::addresses(&db, since(last))?;
     let addrs: Vec<Addr> = rows
@@ -142,9 +142,9 @@ pub fn mid(
     print: bool,
     multi: bool,
     json: bool,
-    _cfg: &Config,
+    cfg: &Config,
 ) -> Result<(), String> {
-    let db = crate::index::db_path();
+    let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::messages(&db, since(last), from)?;
     let msgs: Vec<Msg> = rows
@@ -184,8 +184,8 @@ pub fn mid(
 
 /// Pick a single message and return its message-id (used by the `view` and
 /// `decompile` omit-input pickers).
-pub fn pick_message_id(from: Option<&str>, last: u32, _cfg: &Config) -> Result<String, String> {
-    let db = crate::index::db_path();
+pub fn pick_message_id(from: Option<&str>, last: u32, cfg: &Config) -> Result<String, String> {
+    let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::messages(&db, since(last), from)?;
     let msgs: Vec<Msg> = rows
