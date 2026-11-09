@@ -180,7 +180,7 @@ enum ListDomain {
     },
     /// List addresses
     Addr {
-        /// Only consider addresses seen in the last N days (0 = no bound)
+        /// Only consider addresses seen in the last N days (default 0 = all)
         #[arg(long)]
         last: Option<u32>,
         /// Print a JSON array instead of plain values
@@ -226,7 +226,7 @@ enum PickDomain {
     },
     /// Pick an address and print `Name <email>`
     Addr {
-        /// Only consider addresses seen in the last N days (0 = no bound)
+        /// Only consider addresses seen in the last N days (default 0 = all)
         #[arg(long)]
         last: Option<u32>,
         /// Allow selecting multiple addresses
@@ -321,7 +321,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             ListDomain::Msgs { from, last, json } => {
                 lookup::list_msgs(from.as_deref(), last.unwrap_or(30), json, cfg)
             }
-            ListDomain::Addr { last, json } => lookup::list_addr(last.unwrap_or(30), json, cfg),
+            ListDomain::Addr { last, json } => lookup::list_addr(last.unwrap_or(0), json, cfg),
         },
         Command::Pick { domain } => match domain {
             PickDomain::Drafts { multi, lines } => list::pick_drafts(multi, lines, cfg),
@@ -333,7 +333,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 lines,
             } => lookup::pick_msgs(from.as_deref(), last.unwrap_or(30), multi, lines, cfg),
             PickDomain::Addr { last, multi, lines } => {
-                lookup::pick_addr(last.unwrap_or(30), multi, lines, cfg)
+                lookup::pick_addr(last.unwrap_or(0), multi, lines, cfg)
             }
         },
     }
