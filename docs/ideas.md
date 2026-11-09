@@ -20,6 +20,10 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   walking the nested message's body.
 - **Quote collapsing** — long reply chains render as a wall of `>` lines; an
   option to trim or collapse quoted context would improve readability.
+- **Index progress bar** — `mdmc index` reads and parses every header in scope
+  (minutes over a large maildir) with no feedback. Show a progress bar (and
+  optionally a count) on stderr, driven by the file-walk or the parallel parse
+  stage.
 
 ## Open questions
 
