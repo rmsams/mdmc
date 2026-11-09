@@ -49,6 +49,8 @@ pub struct Draft {
     pub quote: Option<String>,
     #[serde(default)]
     pub forward: Option<String>,
+    #[serde(rename = "forward-attach", default)]
+    pub forward_attach: Option<String>,
     #[serde(default)]
     pub format: Option<String>,
     #[serde(default)]

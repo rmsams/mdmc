@@ -84,6 +84,7 @@ pub fn new(
     reply: Option<String>,
     reply_all: Option<String>,
     forward: Option<String>,
+    forward_attach: Option<String>,
     attachments: Vec<String>,
     body: Option<String>,
     format: Option<String>,
@@ -130,7 +131,8 @@ pub fn new(
         None => (Vec::new(), Vec::new(), None),
     };
 
-    let forward_subject = match &forward {
+    let forward_id = forward.as_deref().or(forward_attach.as_deref());
+    let forward_subject = match forward_id {
         Some(id) => {
             let mail_root = cfg.paths_mail()?;
             let message = crate::reply::resolve(id, &mail_root)?;
@@ -186,6 +188,12 @@ pub fn new(
     }
     if let Some(forward) = &forward {
         fields.push(("forward".to_string(), Field::Str(forward.clone())));
+    }
+    if let Some(forward_attach) = &forward_attach {
+        fields.push((
+            "forward-attach".to_string(),
+            Field::Str(forward_attach.clone()),
+        ));
     }
     if !attachments.is_empty() {
         fields.push(("attachments".to_string(), Field::List(attachments.clone())));
@@ -340,6 +348,7 @@ mod tests {
             reply.map(str::to_string),
             reply_all.map(str::to_string),
             forward.map(str::to_string),
+            None,
             Vec::new(),
             None,
             None,
@@ -520,6 +529,43 @@ mod tests {
         assert!(text.contains("forward: m1@example.com\n"));
         assert!(!text.contains("in-reply-to"));
         assert!(!text.contains("quote:"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_forward_attach_fills_subject_and_field() {
+        let (dir, cfg, source) = setup_maildir();
+        new(
+            &cfg,
+            Some("test".to_string()),
+            Some("bob@example.com".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("m1@example.com".to_string()),
+            Vec::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("fwd-lunch.md")).unwrap();
+        assert!(text.contains("subject: 'Fwd: Lunch'\n"));
+        assert!(text.contains("to:\n  - bob@example.com\n"));
+        assert!(text.contains("forward-attach: m1@example.com\n"));
+        assert!(!text.contains("forward: "));
+        assert!(!text.contains("in-reply-to"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

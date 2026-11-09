@@ -95,6 +95,14 @@ pub fn build_forward(message_id: &str, mail_root: Option<&Path>) -> String {
     out
 }
 
+/// Resolve a message-id to its raw RFC 5322 bytes (notmuch `mid:` lookup with a
+/// maildir-scan fallback), or `None` when it cannot be found.
+pub fn resolve_raw(message_id: &str, mail_root: Option<&Path>) -> Option<Vec<u8>> {
+    let root = mail_root?;
+    let path = crate::notmuch::resolve(message_id, Some(root))?;
+    std::fs::read(path).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -371,6 +371,7 @@ pub fn compile_mml(
     inline_cids: &[String],
     signing_key: Option<&str>,
     encrypt: Option<EncryptSpec<'_>>,
+    forward_attach: Option<(&str, &[u8])>,
 ) -> Result<Vec<u8>, String> {
     let compiler = MmlCompilerBuilder::new()
         .build(mml_source)
@@ -381,6 +382,16 @@ pub fn compile_mml(
     let mut builder = result.into_msg_builder();
 
     inject_content_ids(&mut builder, inline_cids);
+    if let Some((message_id, raw)) = forward_attach {
+        let body = builder.body.take().ok_or("no body to forward")?;
+        let forward_part = MimePart::new("message/rfc822", BodyPart::Binary(raw.to_vec().into()))
+            .attachment(format!("{message_id}.eml"));
+        let mixed = MimePart::new(
+            ContentType::new("multipart/mixed"),
+            BodyPart::Multipart(vec![body, forward_part]),
+        );
+        builder.body = Some(mixed);
+    }
     if let Some(key) = signing_key {
         sign_body(&mut builder, key)?;
     }

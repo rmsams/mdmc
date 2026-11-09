@@ -73,6 +73,9 @@
     "forward": {
       "type": "string"
     },
+    "forward-attach": {
+      "type": "string"
+    },
     "attachments": {
       "type": "array",
       "items": {

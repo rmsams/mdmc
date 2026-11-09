@@ -104,6 +104,7 @@ fn recipient_emails(to: &[String], cc: &[String], bcc: &[String]) -> Vec<String>
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn compile_message(
     cfg: &Config,
     fm: &frontmatter::Draft,
@@ -112,6 +113,7 @@ fn compile_message(
     attachments_dir: &Path,
     note_dir: &Path,
     acct: &config::Account,
+    forward_attach: Option<(&str, &[u8])>,
 ) -> Result<String, String> {
     let to = &fm.to.0;
     let cc = &fm.cc.0;
@@ -167,7 +169,7 @@ fn compile_message(
     } else {
         None
     };
-    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key, encrypt)?;
+    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key, encrypt, forward_attach)?;
 
     let mut message = String::from_utf8_lossy(&compiled).into_owned();
     message = message.replace("\r\n", "\n");
@@ -280,6 +282,16 @@ pub fn compile(
             body_text.push_str(&f);
         }
     }
+    let forward_attach_id = fm
+        .forward_attach
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let mail_root = cfg.paths_mail().ok();
+    let forward_attach = match forward_attach_id {
+        Some(id) => quote::resolve_raw(id, mail_root.as_deref()).map(|raw| (id, raw)),
+        None => None,
+    };
 
     let note_dir = arg.parent().unwrap_or_else(|| Path::new("."));
     let message = compile_message(
@@ -290,6 +302,9 @@ pub fn compile(
         &attachments_dir,
         note_dir,
         acct,
+        forward_attach
+            .as_ref()
+            .map(|(id, raw)| (*id, raw.as_slice())),
     )?;
 
     if stdout {

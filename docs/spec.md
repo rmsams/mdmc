@@ -125,6 +125,12 @@ recipient is explicit) and sets no `In-Reply-To`/`References` headers.
 ----------` header block (`From`/`Date`/`Subject`/`To`) followed by the body,
 unquoted — when the draft carries `forward`.
 
+`mdmc new --forward-attach <id>` is the MIME-forwarding variant: it writes a
+`forward-attach: <id>` field, and `compile` embeds the entire original message
+(raw RFC 5322, headers and all parts) as a `message/rfc822` part inside a
+`multipart/mixed` body, preserving the original's attachments. The two modes
+are mutually exclusive.
+
 ## Lookup index
 
 `mdmc index` builds a local SQLite index of

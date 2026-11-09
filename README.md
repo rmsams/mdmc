@@ -80,6 +80,10 @@ subject:
 mdmc new --account rmsams-gmail --forward 20260101.123456.abc@x1g11 --to "a@example.com"
 ```
 
+Use `--forward-attach` instead to embed the full original message (headers,
+attachments and all) as a `message/rfc822` attachment — proper MIME
+forwarding.
+
 Open an existing draft in `$EDITOR` — by slug, path, or Message-ID.
 `--editor <name>` selects a named editor from `[editors]`:
 
