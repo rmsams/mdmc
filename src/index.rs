@@ -1,4 +1,6 @@
+use std::io::IsTerminal;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use rusqlite::Connection;
@@ -32,26 +34,50 @@ pub fn build(query: &str, db: &Path) -> Result<usize, String> {
 
 fn build_with(query: &str, db: &Path, bin: &str) -> Result<usize, String> {
     let files = crate::notmuch::search_files_with(bin, query)?;
+    let total = files.len();
 
-    let rows: Mutex<Vec<Row>> = Mutex::new(Vec::with_capacity(files.len()));
+    let rows: Mutex<Vec<Row>> = Mutex::new(Vec::with_capacity(total));
+    let processed = AtomicUsize::new(0);
     let threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
         .max(1);
-    let chunk = files.len().div_ceil(threads).max(1);
+    let chunk = total.div_ceil(threads).max(1);
+    let show_progress = total > 0 && std::io::stderr().is_terminal();
 
     std::thread::scope(|scope| {
         for group in files.chunks(chunk) {
             let rows = &rows;
+            let processed = &processed;
             scope.spawn(move || {
                 let mut local = Vec::with_capacity(group.len());
                 for path in group {
                     if let Some(row) = read_row(path) {
                         local.push(row);
                     }
+                    processed.fetch_add(1, Ordering::Relaxed);
                 }
                 rows.lock().unwrap().extend(local);
             });
+        }
+
+        // Progress reporter (stderr, TTY only): the main thread polls the
+        // shared counter while the workers parse files in parallel.
+        if show_progress {
+            let mut reported = 0usize;
+            loop {
+                let n = processed.load(Ordering::Relaxed);
+                if n != reported {
+                    let pct = n as f64 / total as f64 * 100.0;
+                    eprint!("\r{n}/{total} ({pct:.1}%)");
+                    reported = n;
+                }
+                if n >= total {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            eprintln!();
         }
     });
 
