@@ -272,6 +272,14 @@ pub fn compile(
             body_text.push_str(&q);
         }
     }
+    let forward = fm.forward.as_deref().unwrap_or("").trim().to_string();
+    if !forward.is_empty() {
+        let mail_root = cfg.paths_mail().ok();
+        let f = quote::build_forward(&forward, mail_root.as_deref());
+        if !f.is_empty() {
+            body_text.push_str(&f);
+        }
+    }
 
     let note_dir = arg.parent().unwrap_or_else(|| Path::new("."));
     let message = compile_message(

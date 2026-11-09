@@ -48,6 +48,8 @@ pub struct Draft {
     #[serde(default)]
     pub quote: Option<String>,
     #[serde(default)]
+    pub forward: Option<String>,
+    #[serde(default)]
     pub format: Option<String>,
     #[serde(default)]
     pub css: Option<String>,

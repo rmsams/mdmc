@@ -9,7 +9,8 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 `paths.source`, assigns its `message-id`, validates its frontmatter against the
 shipped schema, and optionally opens `$EDITOR`. With `--reply <id>` or
 `--reply-all <id>`, it resolves the original message and auto-fills the
-envelope (see Reply). `mdmc edit` opens an existing draft in `$EDITOR`.
+envelope (see Reply); with `--forward <id>` it embeds the original at compile
+time (see Forward). `mdmc edit` opens an existing draft in `$EDITOR`.
 `mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
 already marked `sent` unless `--again` is given. `mdmc reconcile` marks drafts
 `sent` once their message-id is in the account's sent maildir.
@@ -113,6 +114,16 @@ and minus the account's own `from` address, and allows `--to`/`--cc` to override
 the auto-filled values. The subject is prefixed with `Re: ` unless it already
 has the prefix; an explicit `--subject` overrides it. The `in-reply-to` and
 `quote: auto` fields are always written.
+
+## Forward
+
+`mdmc new --forward <id>` resolves the original message (same lookup as
+`--reply`) and writes a `forward: <id>` field, prefixing the subject with
+`Fwd: ` unless `--subject` overrides it. It does not fill `to`/`cc` (the
+recipient is explicit) and sets no `In-Reply-To`/`References` headers.
+`compile` appends the forwarded message — a `---------- Forwarded message
+----------` header block (`From`/`Date`/`Subject`/`To`) followed by the body,
+unquoted — when the draft carries `forward`.
 
 ## Lookup index
 
@@ -298,7 +309,7 @@ construction, so it does not validate; the schema is for external validation
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `maildir.rs` — maildir delivery/dedup helpers and the Message-ID scan fallback.
 - `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve, scoped file listing).
-- `quote.rs` — reply quoting (notmuch resolve + `mail-parser`).
+- `quote.rs` — reply quoting and forward embedding (notmuch resolve + `mail-parser`).
 - `reply.rs` — reply envelope resolution (recipients + subject).
 - `util.rs` — hostname and Message-ID generation.
 - `view.rs` — the `view` subcommand (markdown rendering to stdout).

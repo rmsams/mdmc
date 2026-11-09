@@ -57,11 +57,14 @@ enum Command {
         #[arg(long)]
         subject: Option<String>,
         /// Message-ID to reply to (sender only); not with --to/--cc
-        #[arg(long, conflicts_with = "reply_all")]
+        #[arg(long, conflicts_with_all = ["reply_all", "forward"])]
         reply: Option<String>,
         /// Message-ID to reply to all recipients; --to/--cc override the defaults
-        #[arg(long, conflicts_with = "reply")]
+        #[arg(long, conflicts_with_all = ["reply", "forward"])]
         reply_all: Option<String>,
+        /// Message-ID of the message to forward (embedded at compile time)
+        #[arg(long, conflicts_with_all = ["reply", "reply_all"])]
+        forward: Option<String>,
         /// Attachment file path(s)
         #[arg(long)]
         attachments: Vec<String>,
@@ -287,6 +290,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             subject,
             reply,
             reply_all,
+            forward,
             attachments,
             body,
             format,
@@ -306,6 +310,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             subject,
             reply,
             reply_all,
+            forward,
             attachments,
             body,
             format,

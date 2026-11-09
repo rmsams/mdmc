@@ -83,6 +83,7 @@ pub fn new(
     subject: Option<String>,
     reply: Option<String>,
     reply_all: Option<String>,
+    forward: Option<String>,
     attachments: Vec<String>,
     body: Option<String>,
     format: Option<String>,
@@ -129,7 +130,21 @@ pub fn new(
         None => (Vec::new(), Vec::new(), None),
     };
 
-    let effective_subject = subject.clone().or(reply_subject);
+    let forward_subject = match &forward {
+        Some(id) => {
+            let mail_root = cfg.paths_mail()?;
+            let message = crate::reply::resolve(id, &mail_root)?;
+            let subj = message
+                .subject()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("(no subject)");
+            Some(format!("Fwd: {subj}"))
+        }
+        None => None,
+    };
+
+    let effective_subject = subject.clone().or(reply_subject).or(forward_subject);
     let effective_to = to.as_deref().map(split_addresses).unwrap_or(reply_to);
     let effective_cc = cc.as_deref().map(split_addresses).unwrap_or(reply_cc);
 
@@ -168,6 +183,9 @@ pub fn new(
     if let Some(in_reply_to) = &in_reply_to {
         fields.push(("in-reply-to".to_string(), Field::Str(in_reply_to.clone())));
         fields.push(("quote".to_string(), Field::Str("auto".to_string())));
+    }
+    if let Some(forward) = &forward {
+        fields.push(("forward".to_string(), Field::Str(forward.clone())));
     }
     if !attachments.is_empty() {
         fields.push(("attachments".to_string(), Field::List(attachments.clone())));
@@ -306,6 +324,7 @@ mod tests {
         cfg: &Config,
         reply: Option<&str>,
         reply_all: Option<&str>,
+        forward: Option<&str>,
         to: Option<&str>,
         cc: Option<&str>,
         bcc: Option<&str>,
@@ -320,6 +339,7 @@ mod tests {
             subject.map(str::to_string),
             reply.map(str::to_string),
             reply_all.map(str::to_string),
+            forward.map(str::to_string),
             Vec::new(),
             None,
             None,
@@ -336,7 +356,17 @@ mod tests {
     #[test]
     fn new_reply_fills_envelope() {
         let (dir, cfg, source) = setup_maildir();
-        run_new(&cfg, Some("m1@example.com"), None, None, None, None, None).unwrap();
+        run_new(
+            &cfg,
+            Some("m1@example.com"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
         assert!(text.contains("subject: 'Re: Lunch'\n"));
@@ -351,7 +381,17 @@ mod tests {
     #[test]
     fn new_reply_all_fills_cc_and_excludes_self() {
         let (dir, cfg, source) = setup_maildir();
-        run_new(&cfg, None, Some("m1@example.com"), None, None, None, None).unwrap();
+        run_new(
+            &cfg,
+            None,
+            Some("m1@example.com"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
         assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
@@ -368,6 +408,7 @@ mod tests {
             &cfg,
             None,
             Some("m1@example.com"),
+            None,
             Some("override@example.com"),
             Some("override-cc@example.com"),
             None,
@@ -396,6 +437,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap_err();
         assert!(err.contains("not found"));
@@ -410,6 +452,7 @@ mod tests {
             &cfg,
             Some("m1@example.com"),
             None,
+            None,
             Some("a@b.c"),
             None,
             None,
@@ -421,6 +464,7 @@ mod tests {
         let err = run_new(
             &cfg,
             Some("m1@example.com"),
+            None,
             None,
             None,
             Some("a@b.c"),
@@ -442,6 +486,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             Some("bcc@example.com"),
             None,
         )
@@ -450,6 +495,31 @@ mod tests {
         let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
         assert!(text.contains("bcc:\n  - bcc@example.com\n"));
         assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_forward_fills_subject_and_field() {
+        let (dir, cfg, source) = setup_maildir();
+        run_new(
+            &cfg,
+            None,
+            None,
+            Some("m1@example.com"),
+            Some("bob@example.com"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("fwd-lunch.md")).unwrap();
+        assert!(text.contains("subject: 'Fwd: Lunch'\n"));
+        assert!(text.contains("to:\n  - bob@example.com\n"));
+        assert!(text.contains("forward: m1@example.com\n"));
+        assert!(!text.contains("in-reply-to"));
+        assert!(!text.contains("quote:"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
