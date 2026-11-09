@@ -257,7 +257,7 @@ pub fn compile(
         missing.push("subject");
     }
     if !missing.is_empty() {
-        return Err(missing.join(", "));
+        return Err(format!("missing required field(s): {}", missing.join(", ")));
     }
 
     let acct = cfg.resolve_account(account_name.as_deref().unwrap())?;
@@ -432,6 +432,43 @@ mod tests {
 
         assert!(compile(true, None, false, "foo", &cfg).is_err());
         assert!(compile(true, None, true, "foo", &cfg).is_ok());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn compile_reports_missing_required_fields() {
+        let dir = std::env::temp_dir().join(format!("mdmc-compile-{}", uuid::Uuid::new_v4()));
+        let source = dir.join("drafts");
+        let attachments = dir.join("attachments");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&attachments).unwrap();
+
+        let cfg = Config {
+            paths: config::Paths {
+                source: Some(source.to_string_lossy().into_owned()),
+                attachments: Some(attachments.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+            accounts: std::collections::BTreeMap::from([(
+                "rmsams-gmail".to_string(),
+                config::Account {
+                    from: Some("a@b.c".to_string()),
+                    ..Default::default()
+                },
+            )]),
+            ..Default::default()
+        };
+
+        std::fs::write(
+            source.join("foo.md"),
+            "---\ntitle: foo\ntype: mail-draft\nstatus: draft\naccount: rmsams-gmail\nto:\n  - x@y.c\n---\n\nbody\n",
+        )
+        .unwrap();
+
+        let err = compile(true, None, false, "foo", &cfg).unwrap_err();
+        assert!(err.contains("missing required field(s): subject"));
+        assert!(!err.contains("account"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

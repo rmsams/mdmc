@@ -31,7 +31,7 @@ pub fn decompile(
     let raw = resolve_input(input, cfg)?;
     let message = MessageParser::new()
         .parse_owned(raw)
-        .ok_or("cannot parse message")?;
+        .ok_or("cannot parse message: not a valid RFC 5322 message")?;
     let message_id = message
         .message_id()
         .map(str::trim)

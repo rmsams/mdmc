@@ -16,7 +16,7 @@ pub fn resolve(in_reply_to: &str, mail_root: &Path) -> Result<Message<'static>, 
     let raw = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     MessageParser::new()
         .parse_owned(raw)
-        .ok_or_else(|| "cannot parse message".to_string())
+        .ok_or_else(|| "cannot parse message: not a valid RFC 5322 message".to_string())
 }
 
 /// The reply envelope: `to`, `cc`, and a `Re:`-prefixed subject.
