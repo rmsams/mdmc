@@ -173,17 +173,22 @@ pub fn addresses(db: &Path, since: i64) -> Result<Vec<(String, String)>, String>
     Ok(rows)
 }
 
-/// `(message_id, from_name, from_addr, subject)` ordered by most recent,
-/// optionally filtered by a `from` substring matched against name or address.
-pub fn messages(
-    db: &Path,
-    since: i64,
-    from: Option<&str>,
-) -> Result<Vec<(String, String, String, String)>, String> {
+/// A row of the message lookup index.
+pub struct MessageRow {
+    pub message_id: String,
+    pub from_name: String,
+    pub from_addr: String,
+    pub subject: String,
+    pub date: i64,
+}
+
+/// Messages ordered by most recent, optionally filtered by a `from` substring
+/// matched against name or address.
+pub fn messages(db: &Path, since: i64, from: Option<&str>) -> Result<Vec<MessageRow>, String> {
     let conn = open(db)?;
     let mut stmt = conn
         .prepare(
-            "SELECT message_id, from_name, from_addr, subject
+            "SELECT message_id, from_name, from_addr, subject, date
              FROM messages
              WHERE date >= ?1
                AND (?2 IS NULL OR instr(lower(from_name), lower(?2)) > 0
@@ -193,7 +198,13 @@ pub fn messages(
         .map_err(|e| format!("cannot prepare message query: {e}"))?;
     let rows = stmt
         .query_map(rusqlite::params![since, from], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            Ok(MessageRow {
+                message_id: r.get(0)?,
+                from_name: r.get(1)?,
+                from_addr: r.get(2)?,
+                subject: r.get(3)?,
+                date: r.get(4)?,
+            })
         })
         .map_err(|e| format!("cannot query messages: {e}"))?
         .collect::<Result<Vec<_>, _>>()
@@ -285,11 +296,11 @@ mod tests {
 
         let msgs = messages(&db, 0, None).unwrap();
         assert_eq!(msgs.len(), 2);
-        assert_eq!(msgs[0].0, "two@x");
+        assert_eq!(msgs[0].message_id, "two@x");
 
         let filtered = messages(&db, 0, Some("ann")).unwrap();
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].0, "one@x");
+        assert_eq!(filtered[0].message_id, "one@x");
 
         std::fs::remove_dir_all(&dir).ok();
     }

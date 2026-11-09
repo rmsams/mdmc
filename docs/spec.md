@@ -131,12 +131,14 @@ address enumeration is off the interactive path):
   prints `Name <email>`; addresses are deduplicated by address, most recent
   first.
 - `mdmc mid [--from A] [--last N] [--print] [--multi] [--json]` picks a
-  message (displayed as `sender — subject`) and prints its message-id.
+  message (displayed as aligned `sender | datetime | subject` columns) and
+  prints its message-id.
 - `--last N` bounds by recency (default 30 days; `0` lifts the bound); `--from`
   is a case-insensitive substring on the sender's name or address. `--print`
-  dumps every match instead of opening a picker; `--json` emits a JSON array
-  (and implies no picker); `--multi` allows multiple selections. Missing index
-  is a hard error ("run `mdmc index` first").
+  and the picker both emit values comma-separated by default, or one per line
+  with `--lines`; `--json` emits a JSON array (and implies no picker);
+  `--multi` allows multiple selections. Missing index is a hard error ("run
+  `mdmc index` first").
 
 `mdmc view` and `mdmc decompile` with no input open the message picker on a
 terminal, so `mdmc view $(mdmc mid)` can be shortened to `mdmc view`.

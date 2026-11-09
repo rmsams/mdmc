@@ -170,6 +170,9 @@ enum Command {
         /// Print a JSON array instead of plain values (implies no picker)
         #[arg(long)]
         json: bool,
+        /// Print values one per line instead of comma-separated
+        #[arg(long)]
+        lines: bool,
     },
     /// Pick a message-id from the index and print it. Never sends.
     Mid {
@@ -188,6 +191,9 @@ enum Command {
         /// Print a JSON array instead of plain values (implies no picker)
         #[arg(long)]
         json: bool,
+        /// Print values one per line instead of comma-separated
+        #[arg(long)]
+        lines: bool,
     },
 }
 
@@ -280,14 +286,24 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             print,
             multi,
             json,
-        } => lookup::addr(last.unwrap_or(30), print, multi, json, cfg),
+            lines,
+        } => lookup::addr(last.unwrap_or(30), print, multi, json, lines, cfg),
         Command::Mid {
             from,
             last,
             print,
             multi,
             json,
-        } => lookup::mid(from.as_deref(), last.unwrap_or(30), print, multi, json, cfg),
+            lines,
+        } => lookup::mid(
+            from.as_deref(),
+            last.unwrap_or(30),
+            print,
+            multi,
+            json,
+            lines,
+            cfg,
+        ),
     }
 }
 

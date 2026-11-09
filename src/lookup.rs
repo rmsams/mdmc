@@ -26,22 +26,21 @@ impl fmt::Display for Addr {
     }
 }
 
-/// A message row, rendered as `sender — subject`.
+/// Maximum rendered width of the sender and subject columns; longer values are
+/// truncated with an ellipsis so the picker rows stay a manageable width.
+const MAX_SENDER: usize = 32;
+const MAX_SUBJECT: usize = 60;
+
+/// A message row, rendered as three aligned columns: `sender`, `datetime`, and
+/// `subject`.
 struct Msg {
     id: String,
     from_name: String,
     from_addr: String,
+    sender: String,
+    datetime: String,
     subject: String,
-}
-
-impl Msg {
-    fn sender(&self) -> &str {
-        if self.from_name.is_empty() {
-            &self.from_addr
-        } else {
-            &self.from_name
-        }
-    }
+    sender_width: usize,
 }
 
 impl fmt::Display for Msg {
@@ -51,8 +50,82 @@ impl fmt::Display for Msg {
         } else {
             &self.subject
         };
-        write!(f, "{} — {subject}", self.sender())
+        write!(
+            f,
+            "{:<sw$}  {:<16}  {}",
+            truncate(&self.sender, MAX_SENDER),
+            self.datetime,
+            truncate(subject, MAX_SUBJECT),
+            sw = self.sender_width
+        )
     }
+}
+
+/// Truncate a string to at most `max` characters, appending an ellipsis when
+/// it is longer.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    if max == 0 {
+        return String::new();
+    }
+    let head: String = s.chars().take(max - 1).collect();
+    format!("{head}…")
+}
+
+/// Format a sender as `Name <email>`, the bare address, or the bare name.
+fn format_sender(name: &str, addr: &str) -> String {
+    if name.is_empty() {
+        addr.to_string()
+    } else if addr.is_empty() {
+        name.to_string()
+    } else {
+        format!("{name} <{addr}>")
+    }
+}
+
+/// Format a unix timestamp as local `YYYY-MM-DD HH:MM`, or empty when absent.
+fn format_datetime(ts: i64) -> String {
+    if ts <= 0 {
+        return String::new();
+    }
+    use chrono::TimeZone;
+    chrono::Local
+        .timestamp_opt(ts, 0)
+        .single()
+        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_default()
+}
+
+/// Build message rows, sizing the sender column to the longest sender so the
+/// picker aligns the three columns.
+fn build_msgs(rows: Vec<crate::index::MessageRow>) -> Vec<Msg> {
+    let mut msgs: Vec<Msg> = rows
+        .into_iter()
+        .map(|r| {
+            let sender = format_sender(&r.from_name, &r.from_addr);
+            Msg {
+                id: r.message_id,
+                from_name: r.from_name,
+                from_addr: r.from_addr,
+                sender,
+                datetime: format_datetime(r.date),
+                subject: r.subject,
+                sender_width: 0,
+            }
+        })
+        .collect();
+    let width = msgs
+        .iter()
+        .map(|m| m.sender.chars().count())
+        .max()
+        .unwrap_or(0)
+        .min(MAX_SENDER);
+    for m in &mut msgs {
+        m.sender_width = width;
+    }
+    msgs
 }
 
 /// The lower bound (unix epoch seconds) for `--last N` days, or `0` when
@@ -105,9 +178,30 @@ fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
     Ok(())
 }
 
+/// Print values comma-joined on one line by default (to compose with
+/// `--to="$(mdmc addr --multi)"`), or one per line with `--lines`.
+fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    if lines {
+        return print_values(values.into_iter());
+    }
+    println!("{}", values.join(", "));
+    Ok(())
+}
+
 /// The `addr` command: pick an address (or print all matches) and write the
-/// chosen `Name <email>` value(s) to stdout.
-pub fn addr(last: u32, print: bool, multi: bool, json: bool, cfg: &Config) -> Result<(), String> {
+/// `Name <email>` value(s) to stdout, comma-joined on one line by default, or
+/// one per line with `--lines`.
+pub fn addr(
+    last: u32,
+    print: bool,
+    multi: bool,
+    json: bool,
+    lines: bool,
+    cfg: &Config,
+) -> Result<(), String> {
     let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::addresses(&db, since(last))?;
@@ -124,38 +218,32 @@ pub fn addr(last: u32, print: bool, multi: bool, json: bool, cfg: &Config) -> Re
         return println_json(&out);
     }
     if print {
-        return print_values(addrs.iter().map(|a| a.name_addr()));
+        return emit_values(addrs.iter().map(|a| a.name_addr()).collect(), lines);
     }
     let chosen = if multi {
         pick_many("address", addrs)?
     } else {
         pick_one("address", addrs)?
     };
-    print_values(chosen.into_iter().map(|a| a.name_addr()))
+    emit_values(chosen.into_iter().map(|a| a.name_addr()).collect(), lines)
 }
 
 /// The `mid` command: pick a message (or print all matches) and write the
-/// chosen message-id(s) to stdout.
+/// message-id(s) to stdout, comma-joined on one line by default, or one per
+/// line with `--lines`.
 pub fn mid(
     from: Option<&str>,
     last: u32,
     print: bool,
     multi: bool,
     json: bool,
+    lines: bool,
     cfg: &Config,
 ) -> Result<(), String> {
     let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::messages(&db, since(last), from)?;
-    let msgs: Vec<Msg> = rows
-        .into_iter()
-        .map(|(id, from_name, from_addr, subject)| Msg {
-            id,
-            from_name,
-            from_addr,
-            subject,
-        })
-        .collect();
+    let msgs = build_msgs(rows);
 
     if json {
         let out: Vec<serde_json::Value> = msgs
@@ -172,14 +260,14 @@ pub fn mid(
         return println_json(&out);
     }
     if print {
-        return print_values(msgs.iter().map(|m| m.id.clone()));
+        return emit_values(msgs.iter().map(|m| m.id.clone()).collect(), lines);
     }
     let chosen = if multi {
         pick_many("message", msgs)?
     } else {
         pick_one("message", msgs)?
     };
-    print_values(chosen.into_iter().map(|m| m.id))
+    emit_values(chosen.into_iter().map(|m| m.id).collect(), lines)
 }
 
 /// Pick a single message and return its message-id (used by the `view` and
@@ -188,15 +276,7 @@ pub fn pick_message_id(from: Option<&str>, last: u32, cfg: &Config) -> Result<St
     let db = cfg.paths_index();
     require_index(&db)?;
     let rows = crate::index::messages(&db, since(last), from)?;
-    let msgs: Vec<Msg> = rows
-        .into_iter()
-        .map(|(id, from_name, from_addr, subject)| Msg {
-            id,
-            from_name,
-            from_addr,
-            subject,
-        })
-        .collect();
+    let msgs = build_msgs(rows);
     if msgs.is_empty() {
         return Err("no messages in index — run `mdmc index` first".to_string());
     }
@@ -210,4 +290,77 @@ fn println_json(value: &[serde_json::Value]) -> Result<(), String> {
         serde_json::to_string(value).map_err(|e| format!("json: {e}"))?
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(id: &str, name: &str, addr: &str, subject: &str, date: i64) -> crate::index::MessageRow {
+        crate::index::MessageRow {
+            message_id: id.to_string(),
+            from_name: name.to_string(),
+            from_addr: addr.to_string(),
+            subject: subject.to_string(),
+            date,
+        }
+    }
+
+    #[test]
+    fn message_display_aligns_three_columns() {
+        let msgs = build_msgs(vec![
+            row("1", "Alice", "a@x", "Hi", 0),
+            row("2", "Bob", "b@x", "", 0),
+            row("3", "", "weekly@x", "subj", 0),
+        ]);
+        let rendered: Vec<String> = msgs.iter().map(|m| m.to_string()).collect();
+
+        // The sender column holds the full "Name <email>" form.
+        assert!(rendered[0].starts_with("Alice <a@x>"));
+        assert!(rendered[1].starts_with("Bob <b@x>"));
+        assert!(rendered[2].starts_with("weekly@x"));
+
+        // The subject starts after sender (max 11) + 2 + datetime (16) + 2.
+        let col = "Alice <a@x>".len() + 2 + 16 + 2;
+        assert_eq!(&rendered[0][col..], "Hi");
+        assert_eq!(&rendered[1][col..], "(no subject)");
+        assert_eq!(&rendered[2][col..], "subj");
+    }
+
+    #[test]
+    fn format_sender_combines_name_and_address() {
+        assert_eq!(format_sender("Alice", "a@x"), "Alice <a@x>");
+        assert_eq!(format_sender("", "a@x"), "a@x");
+        assert_eq!(format_sender("Alice", ""), "Alice");
+    }
+
+    #[test]
+    fn truncate_caps_at_max_with_ellipsis() {
+        assert_eq!(truncate("short", 10), "short");
+        assert_eq!(truncate("abcdefgh", 5), "abcd…");
+        assert_eq!(truncate("", 5), "");
+    }
+
+    #[test]
+    fn message_display_truncates_long_columns() {
+        let long_subject = "x".repeat(100);
+        let msgs = build_msgs(vec![row(
+            "1",
+            "A very long display name over here",
+            "averylongemail@example.com",
+            &long_subject,
+            0,
+        )]);
+        let rendered = msgs[0].to_string();
+
+        // Sender and subject are both truncated, so the row stays bounded.
+        assert!(rendered.contains('…'));
+        assert!(rendered.chars().count() <= MAX_SENDER + 2 + 16 + 2 + MAX_SUBJECT);
+    }
+
+    #[test]
+    fn format_datetime_empty_when_absent() {
+        assert_eq!(format_datetime(0), "");
+        assert_eq!(format_datetime(-5), "");
+    }
 }
