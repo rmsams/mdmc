@@ -254,12 +254,14 @@ mod tests {
     use super::Cli;
     use clap::CommandFactory;
 
-    /// Generate roff man pages under `man/` (run explicitly:
+    /// Generate roff man pages under `man/man1/` (run explicitly:
     /// `cargo test --bin mdmc generate_man_pages -- --ignored`).
     #[test]
     #[ignore]
     fn generate_man_pages() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("man");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("man")
+            .join("man1");
         std::fs::create_dir_all(&dir).unwrap();
         clap_mangen::generate_to(Cli::command(), &dir).unwrap();
     }

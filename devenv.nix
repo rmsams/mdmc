@@ -10,6 +10,7 @@
     pkgs.pandoc
     pkgs.notmuch
     pkgs.sqlite
+    pkgs.man-db
   ];
 
   # Point notmuch at the local dev database (built by `dev-setup`).

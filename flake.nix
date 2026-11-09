@@ -19,7 +19,7 @@
         buildInputs = [ pkgs.sqlite ];
         doCheck = false;
         postInstall = ''
-          installManPage man/*.1
+          installManPage man/man1/*.1
         '';
       };
     in
