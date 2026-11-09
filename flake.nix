@@ -24,7 +24,7 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = with pkgs; [ cargo rustc rustfmt clippy pandoc notmuch ];
+        buildInputs = with pkgs; [ cargo rustc rustfmt clippy pandoc ];
       };
     };
 }

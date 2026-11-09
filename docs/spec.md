@@ -93,7 +93,8 @@ idempotent and never leaves stale duplicate drafts.
 2. Load the draft's `---` frontmatter (YAML) + body.
 3. Resolve the account's `from`/`realname` from `[accounts.<name>]`.
 4. Reuse the draft's `message-id` (or generate one for legacy drafts).
-5. Optionally append a reply quote (`notmuch show` → `id:` lookup).
+5. Optionally append a reply quote (resolved by the same maildir scan
+   `decompile` uses, then parsed with `mail-parser`).
 6. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
    with `![[…]]` image embeds becoming inline `cid:` parts.
 7. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
@@ -218,7 +219,7 @@ construction, so it does not validate; the schema is for external validation
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
-- `quote.rs` — notmuch reply quoting.
+- `quote.rs` — reply quoting (maildir scan + `mail-parser`).
 - `util.rs` — hostname and Message-ID generation.
 
 ## MML crate

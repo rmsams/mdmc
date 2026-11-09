@@ -266,7 +266,8 @@ pub fn compile(
     let quote = fm.quote.as_deref().unwrap_or("auto").trim();
     let mut body_text = body.trim_matches('\n').to_string();
     if !in_reply_to.is_empty() && quote == "auto" {
-        let q = quote::build_quote(&in_reply_to);
+        let mail_root = cfg.paths_mail().ok();
+        let q = quote::build_quote(&in_reply_to, mail_root.as_deref());
         if !q.is_empty() {
             body_text.push_str(&q);
         }
