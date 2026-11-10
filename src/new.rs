@@ -247,7 +247,7 @@ pub fn new(
         }
     }
 
-    println!("draft: {}", path.display());
+    println!("{}", path.display());
     Ok(())
 }
 
