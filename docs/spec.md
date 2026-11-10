@@ -13,8 +13,9 @@ envelope (see Reply); with `--forward <id>` it embeds the original at compile
 time (see Forward). `mdmc draft` opens a draft in `$EDITOR` — by slug, path, or
 Message-ID, or interactively picked when given no argument. When the Message-ID
 has no markdown draft yet, it is imported from the account's drafts maildir
-(decompiled to a `mail-draft` in `paths.source`, `status: pending`), then the
-editor opens and the path is printed on close.
+(decompiled to a `mail-draft` in `paths.source`, `status: pending`). After the
+editor closes it prints the path, or with `--compile` compiles the draft back to
+the drafts maildir instead.
 `mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
 already marked `sent` unless `--again` is given. `mdmc reconcile` syncs each
 draft's `status` with where its message actually lives, forward-only: `pending`

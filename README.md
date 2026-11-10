@@ -87,13 +87,15 @@ forwarding.
 
 Open a draft in `$EDITOR` — by slug, path, or Message-ID. When the Message-ID
 has no markdown draft yet, it is imported from the account's drafts maildir.
-With no argument, it opens an interactive picker. `--editor <name>` selects a
-named editor from `[editors]`:
+With no argument, it opens an interactive picker. `--compile` compiles the
+draft back to the drafts maildir after the editor closes (instead of printing
+the path). `--editor <name>` selects a named editor from `[editors]`:
 
 ```sh
 mdmc draft                       # pick a draft, then open it
 mdmc draft hello
 mdmc draft abc123@x              # import from the drafts maildir if absent
+mdmc draft abc123@x --compile    # ...and compile back to the drafts maildir
 mdmc draft hello --editor obsidian
 ```
 
