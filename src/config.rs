@@ -96,37 +96,19 @@ pub struct Config {
     pub accounts: BTreeMap<String, Account>,
     #[serde(default)]
     pub editors: Vec<Editor>,
-    #[serde(default, skip_serializing_if = "Index::is_empty")]
-    pub index: Index,
     #[serde(default, skip_serializing_if = "Lookup::is_empty")]
     pub lookup: Lookup,
 }
 
-/// The lookup-index section: the notmuch query scoping which folders are
-/// indexed by `mdmc index`.
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
-pub struct Index {
-    pub query: Option<String>,
-}
-
-impl Index {
-    fn is_empty(&self) -> bool {
-        self.query.is_none()
-    }
-}
-
-/// Defaults for the `list`/`pick` lookup commands (picker page size and the
-/// `--last` recency bounds).
+/// Defaults for the `list`/`pick` commands (picker page size).
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Lookup {
     pub page_size: Option<usize>,
-    pub msgs_last: Option<u32>,
-    pub addr_last: Option<u32>,
 }
 
 impl Lookup {
     fn is_empty(&self) -> bool {
-        self.page_size.is_none() && self.msgs_last.is_none() && self.addr_last.is_none()
+        self.page_size.is_none()
     }
 }
 
@@ -144,7 +126,6 @@ pub struct Paths {
     pub pandoc_data: Option<String>,
     pub mail: Option<String>,
     pub snapshots: Option<String>,
-    pub index: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -216,9 +197,6 @@ impl Config {
         if let Some(p) = &mut self.paths.snapshots {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
-        if let Some(p) = &mut self.paths.index {
-            *p = resolve_path(p, base).to_string_lossy().into_owned();
-        }
         for v in self.folders.values_mut() {
             *v = resolve_path(v, base).to_string_lossy().into_owned();
         }
@@ -242,7 +220,6 @@ impl Config {
                 pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
                 mail: local.paths.mail.or(global.paths.mail),
                 snapshots: local.paths.snapshots.or(global.paths.snapshots),
-                index: local.paths.index.or(global.paths.index),
             },
             folders: merge_map(local.folders, global.folders),
             defaults: Defaults {
@@ -257,13 +234,8 @@ impl Config {
             } else {
                 local.editors
             },
-            index: Index {
-                query: local.index.query.or(global.index.query),
-            },
             lookup: Lookup {
                 page_size: local.lookup.page_size.or(global.lookup.page_size),
-                msgs_last: local.lookup.msgs_last.or(global.lookup.msgs_last),
-                addr_last: local.lookup.addr_last.or(global.lookup.addr_last),
             },
         }
     }
@@ -310,41 +282,9 @@ impl Config {
         Ok(expand_home(raw))
     }
 
-    /// The lookup-index database path: `[paths] index` when set, else
-    /// `$XDG_DATA_HOME/mdmc/index.db` (falling back to `~/.local/share/mdmc`).
-    pub fn paths_index(&self) -> PathBuf {
-        if let Some(raw) = &self.paths.index {
-            return expand_home(raw);
-        }
-        let base = std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share"))
-            })
-            .unwrap_or_else(|| PathBuf::from("."));
-        base.join("mdmc").join("index.db")
-    }
-
-    /// The notmuch query scoping the lookup index (required by `mdmc index`).
-    pub fn index_query(&self) -> Result<&str, String> {
-        self.index.query.as_deref().ok_or_else(|| {
-            "[index] query is required (the notmuch query scoping the index)".to_string()
-        })
-    }
-
     /// The picker page size (`[lookup] page_size`, default 7).
     pub fn page_size(&self) -> usize {
         self.lookup.page_size.unwrap_or(7)
-    }
-
-    /// The default `--last` for `list`/`pick msgs` (`[lookup] msgs_last`, default 30).
-    pub fn msgs_last(&self) -> u32 {
-        self.lookup.msgs_last.unwrap_or(30)
-    }
-
-    /// The default `--last` for `list`/`pick addr` (`[lookup] addr_last`, default 0).
-    pub fn addr_last(&self) -> u32 {
-        self.lookup.addr_last.unwrap_or(0)
     }
 
     pub fn default_account(&self) -> Option<&str> {
@@ -367,47 +307,6 @@ impl Config {
     pub fn resolve_target_folder(&self, name: &str) -> PathBuf {
         let raw = self.folders.get(name).map(String::as_str).unwrap_or(name);
         expand_home(raw)
-    }
-
-    /// Resolve `--folders` specs to absolute maildir paths. A spec is a
-    /// `[folders]` registry name (or literal path), `drafts`/`sent` (every
-    /// account's respective folder), or `<account>.drafts`/`<account>.sent`
-    /// (one account's folder).
-    pub fn resolve_folders(&self, specs: &[String]) -> Result<Vec<String>, String> {
-        let mut paths = Vec::new();
-        for spec in specs {
-            if let Some((account, qualifier)) = spec.split_once('.') {
-                let acct = self.resolve_account(account)?;
-                let path = match qualifier {
-                    "drafts" => acct.drafts.as_deref(),
-                    "sent" => acct.sent.as_deref(),
-                    other => {
-                        return Err(format!(
-                            "unknown folder qualifier '{other}' (expected drafts or sent)"
-                        ));
-                    }
-                };
-                match path {
-                    Some(p) => paths.push(p.to_string()),
-                    None => {
-                        return Err(format!(
-                            "account '{account}' has no '{qualifier}' folder configured"
-                        ));
-                    }
-                }
-                continue;
-            }
-            match spec.as_str() {
-                "drafts" => paths.extend(self.accounts.values().filter_map(|a| a.drafts.clone())),
-                "sent" => paths.extend(self.accounts.values().filter_map(|a| a.sent.clone())),
-                name => paths.push(
-                    self.resolve_target_folder(name)
-                        .to_string_lossy()
-                        .into_owned(),
-                ),
-            }
-        }
-        Ok(paths)
     }
 
     /// Look up an account by name in `[accounts]`.
@@ -510,54 +409,6 @@ lua-filters = ["email"]
     fn resolve_account_missing_errors() {
         let cfg = Config::default();
         assert!(cfg.resolve_account("nope").is_err());
-    }
-
-    #[test]
-    fn resolve_folders_expands_drafts_sent_and_registry() {
-        let cfg = Config {
-            accounts: std::collections::BTreeMap::from([
-                (
-                    "a".to_string(),
-                    Account {
-                        drafts: Some("/mail/a/Drafts".to_string()),
-                        sent: Some("/mail/a/Sent".to_string()),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "b".to_string(),
-                    Account {
-                        drafts: Some("/mail/b/Drafts".to_string()),
-                        sent: Some("/mail/b/Sent".to_string()),
-                        ..Default::default()
-                    },
-                ),
-            ]),
-            folders: std::collections::BTreeMap::from([(
-                "refs".to_string(),
-                "/mail/refs".to_string(),
-            )]),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            cfg.resolve_folders(&["drafts".to_string()]).unwrap(),
-            vec!["/mail/a/Drafts".to_string(), "/mail/b/Drafts".to_string()]
-        );
-        assert_eq!(
-            cfg.resolve_folders(&["sent".to_string()]).unwrap(),
-            vec!["/mail/a/Sent".to_string(), "/mail/b/Sent".to_string()]
-        );
-        assert_eq!(
-            cfg.resolve_folders(&["a.sent".to_string()]).unwrap(),
-            vec!["/mail/a/Sent".to_string()]
-        );
-        assert_eq!(
-            cfg.resolve_folders(&["refs".to_string()]).unwrap(),
-            vec!["/mail/refs".to_string()]
-        );
-        assert!(cfg.resolve_folders(&["nope.drafts".to_string()]).is_err());
-        assert!(cfg.resolve_folders(&["a.nope".to_string()]).is_err());
     }
 
     #[test]

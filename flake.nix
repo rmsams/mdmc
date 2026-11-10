@@ -15,8 +15,7 @@
         version = cargoToml.package.version;
         src = ./.;
         cargoLock = { lockFile = ./Cargo.lock; };
-        nativeBuildInputs = [ pkgs.pkg-config pkgs.installShellFiles ];
-        buildInputs = [ pkgs.sqlite ];
+        nativeBuildInputs = [ pkgs.installShellFiles ];
         doCheck = false;
         postInstall = ''
           installManPage man/man1/*.1

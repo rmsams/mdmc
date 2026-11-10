@@ -30,6 +30,5 @@ EOF
 export NOTMUCH_CONFIG="$STATE/notmuch-config"
 
 notmuch new
-cargo run --manifest-path "$ROOT/Cargo.toml" -- --config "$STATE/mdmc.toml" index
 
 echo "dev environment ready at $STATE (run 'dev-teardown' to reset)"

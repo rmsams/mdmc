@@ -1,4 +1,5 @@
 use std::fmt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
@@ -74,7 +75,7 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
 }
 
 fn emit_paths(entries: Vec<Entry>, lines: bool) -> Result<(), String> {
-    crate::lookup::emit_values(
+    emit_values(
         entries
             .into_iter()
             .map(|e| e.path.display().to_string())
@@ -88,9 +89,9 @@ pub fn pick_drafts(multi: bool, lines: bool, page_size: usize, cfg: &Config) -> 
     let dir = cfg.paths_source()?;
     let entries = collect_entries(&dir, false);
     let chosen = if multi {
-        crate::lookup::pick_many("draft", entries, page_size)?
+        pick_many("draft", entries, page_size)?
     } else {
-        crate::lookup::pick_one("draft", entries, page_size)?
+        pick_one("draft", entries, page_size)?
     };
     emit_paths(chosen, lines)
 }
@@ -105,9 +106,9 @@ pub fn pick_snapshots(
     let dir = cfg.paths_snapshots()?;
     let entries = collect_entries(&dir, true);
     let chosen = if multi {
-        crate::lookup::pick_many("snapshot", entries, page_size)?
+        pick_many("snapshot", entries, page_size)?
     } else {
-        crate::lookup::pick_one("snapshot", entries, page_size)?
+        pick_one("snapshot", entries, page_size)?
     };
     emit_paths(chosen, lines)
 }
@@ -127,9 +128,68 @@ pub fn list_drafts(json: bool, cfg: &Config) -> Result<(), String> {
                 })
             })
             .collect();
-        return crate::lookup::println_json(&out);
+        return println_json(&out);
     }
-    crate::lookup::print_values(entries.iter().map(|e| e.path.display().to_string()))
+    print_values(entries.iter().map(|e| e.path.display().to_string()))
+}
+
+fn pick_one<T: fmt::Display>(
+    prompt: &str,
+    options: Vec<T>,
+    page_size: usize,
+) -> Result<Vec<T>, String> {
+    if options.is_empty() {
+        return Err("no matches".to_string());
+    }
+    let selected = inquire::Select::new(prompt, options)
+        .with_page_size(page_size)
+        .raw_prompt()
+        .map(|op| op.value)
+        .map_err(|e| format!("picker failed: {e}"))?;
+    Ok(vec![selected])
+}
+
+fn pick_many<T: fmt::Display>(
+    prompt: &str,
+    options: Vec<T>,
+    page_size: usize,
+) -> Result<Vec<T>, String> {
+    if options.is_empty() {
+        return Err("no matches".to_string());
+    }
+    let selected = inquire::MultiSelect::new(prompt, options)
+        .with_page_size(page_size)
+        .raw_prompt()
+        .map(|ops| ops.into_iter().map(|op| op.value).collect())
+        .map_err(|e| format!("picker failed: {e}"))?;
+    Ok(selected)
+}
+
+fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
+    let mut out = std::io::stdout().lock();
+    for value in values {
+        writeln!(out, "{value}").map_err(|e| format!("write failed: {e}"))?;
+    }
+    Ok(())
+}
+
+fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    if lines {
+        return print_values(values.into_iter());
+    }
+    println!("{}", values.join(", "));
+    Ok(())
+}
+
+fn println_json(value: &[serde_json::Value]) -> Result<(), String> {
+    println!(
+        "{}",
+        serde_json::to_string(value).map_err(|e| format!("json: {e}"))?
+    );
+    Ok(())
 }
 
 /// `list snapshots`: print snapshot paths, or a JSON array with `--json`.
@@ -147,7 +207,7 @@ pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
                 })
             })
             .collect();
-        return crate::lookup::println_json(&out);
+        return println_json(&out);
     }
-    crate::lookup::print_values(entries.iter().map(|e| e.path.display().to_string()))
+    print_values(entries.iter().map(|e| e.path.display().to_string()))
 }

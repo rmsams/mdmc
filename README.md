@@ -37,19 +37,17 @@ nix build
 ```
 
 Man pages for every command and subcommand are installed to
-`share/man/man1/` (`man mdmc`, `man mdmc-new`, `man mdmc-list-msgs`, …).
+`share/man/man1/` (`man mdmc`, `man mdmc-new`, `man mdmc-list-drafts`, …).
 
 For development, use devenv. The shell is wired to a purely local environment —
 it never touches `~/.config/mdmc` or `~/Mail`. `dev-setup` copies the committed
 `dev/` fixtures (a fake maildir, a sample draft, and a config) into `.dev-state/`
-(a git-ignored working copy), then indexes them with notmuch and mdmc, so tests
-mutate the copy, not the committed assets:
+(a git-ignored working copy) and indexes them with notmuch, so tests mutate the
+copy, not the committed assets:
 
 ```sh
 devenv shell
-dev-setup      # populate .dev-state and build the indexes
-mdmc pick addr # pick an address (`Name <email>`) from the index
-mdmc pick msgs # pick a message-id from the index
+dev-setup      # populate .dev-state and index it with notmuch
 dev-teardown   # wipe .dev-state to reset
 ```
 
@@ -117,30 +115,23 @@ Mark drafts sent once their message-id is in the account's sent maildir:
 mdmc reconcile
 ```
 
-List drafts, snapshots, messages, or addresses to stdout:
+List drafts or snapshots to stdout:
 
 ```sh
 mdmc list drafts               # draft file paths
 mdmc list snapshots            # snapshot file paths
-mdmc list msgs                 # message-ids (--folders, --from, --last filters)
-mdmc list addr                 # `Name <email>` (--folders, --last filters)
 ```
 
-Or interactively pick one (or several with `--multi`) from the same four
-domains:
+Or interactively pick one (or several with `--multi`):
 
 ```sh
 mdmc pick drafts
 mdmc pick snapshots
-mdmc pick msgs
-mdmc pick addr
 ```
 
-`msgs` and `addr` take `--folders` to filter to a union of folders
-(comma-separated): a `[folders]` name, `drafts`/`sent` (every account's),
-or `<account>.drafts`/`<account>.sent`. Both `list` and `pick` support
-`--json` for structured output, and `pick --multi` prints selections
-comma-separated by default (or one per line with `--lines`).
+Both `list` and `pick` support `--json` for structured output, and `pick
+--multi` prints selections comma-separated by default (or one per line with
+`--lines`).
 
 Print the effective (merged, resolved) config as TOML:
 
@@ -208,13 +199,8 @@ encrypt_to = "0x12A96FA9"            # optional; defaults to signing_key
 [folders]
 refs = "~/Mail/example/Reference"
 
-[index]
-query = "path:**"                    # notmuch scope for `mdmc index`
-
 [lookup]
 page_size = 7                        # picker rows (default 7)
-msgs_last = 30                       # default --last for msgs (default 30)
-addr_last = 0                        # default --last for addr (default 0 = all)
 
 [defaults]
 account = "rmsams-gmail"

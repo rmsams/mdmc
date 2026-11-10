@@ -9,7 +9,6 @@
   packages = [
     pkgs.pandoc
     pkgs.notmuch
-    pkgs.sqlite
     pkgs.man-db
   ];
 
@@ -19,7 +18,6 @@
   scripts.mdmc.exec = "cargo run -- --config \"${config.devenv.root}/.dev-state/mdmc.toml\" \"$@\"";
   scripts.build.exec = "cargo build --release";
   scripts.tests.exec = "cargo test";
-  scripts.index.exec = "cargo run -- --config \"${config.devenv.root}/.dev-state/mdmc.toml\" index";
   scripts.notmuch-new.exec = "notmuch new";
   scripts.dev-setup.exec = "bash \"${config.devenv.root}/dev/setup.sh\"";
   scripts.dev-teardown.exec = "rm -rf \"${config.devenv.root}/.dev-state\"";

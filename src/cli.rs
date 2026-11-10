@@ -115,12 +115,12 @@ pub enum Command {
     },
     /// Mark drafts sent when their message-id is in the account's sent maildir.
     Reconcile,
-    /// Pick a draft, snapshot, message, or address (interactive).
+    /// Pick a draft or snapshot (interactive).
     Pick {
         #[command(subcommand)]
         domain: PickDomain,
     },
-    /// List drafts, snapshots, messages, or addresses to stdout.
+    /// List drafts or snapshots to stdout.
     List {
         #[command(subcommand)]
         domain: ListDomain,
@@ -135,8 +135,6 @@ pub enum Command {
     },
     /// Print the effective (merged, resolved) config as TOML.
     Config,
-    /// Build (or rebuild) the lookup index from notmuch.
-    Index,
 }
 
 #[derive(Subcommand)]
@@ -150,33 +148,6 @@ pub enum ListDomain {
     /// List snapshot file paths
     Snapshots {
         /// Print a JSON array instead of plain paths
-        #[arg(long)]
-        json: bool,
-    },
-    /// List message-ids
-    Msgs {
-        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
-        #[arg(long, value_delimiter = ',')]
-        folders: Vec<String>,
-        /// Restrict to messages whose sender matches this substring
-        #[arg(long)]
-        from: Option<String>,
-        /// Only consider messages from the last N days (0 = no bound)
-        #[arg(long)]
-        last: Option<u32>,
-        /// Print a JSON array instead of plain ids
-        #[arg(long)]
-        json: bool,
-    },
-    /// List addresses
-    Addr {
-        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
-        #[arg(long, value_delimiter = ',')]
-        folders: Vec<String>,
-        /// Only consider addresses seen in the last N days (default 0 = all)
-        #[arg(long)]
-        last: Option<u32>,
-        /// Print a JSON array instead of plain values
         #[arg(long)]
         json: bool,
     },
@@ -199,45 +170,6 @@ pub enum PickDomain {
     /// Pick a snapshot and print its path
     Snapshots {
         /// Allow selecting multiple snapshots
-        #[arg(long)]
-        multi: bool,
-        /// Print multiple selections one per line instead of comma-separated
-        #[arg(long)]
-        lines: bool,
-        /// Number of picker rows to show (default: [lookup] page_size)
-        #[arg(long = "page-size")]
-        page_size: Option<usize>,
-    },
-    /// Pick a message and print its message-id
-    Msgs {
-        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
-        #[arg(long, value_delimiter = ',')]
-        folders: Vec<String>,
-        /// Restrict to messages whose sender matches this substring
-        #[arg(long)]
-        from: Option<String>,
-        /// Only consider messages from the last N days (0 = no bound)
-        #[arg(long)]
-        last: Option<u32>,
-        /// Allow selecting multiple messages
-        #[arg(long)]
-        multi: bool,
-        /// Print multiple selections one per line instead of comma-separated
-        #[arg(long)]
-        lines: bool,
-        /// Number of picker rows to show (default: [lookup] page_size)
-        #[arg(long = "page-size")]
-        page_size: Option<usize>,
-    },
-    /// Pick an address and print `Name <email>`
-    Addr {
-        /// Filter to these folders (comma-separated: [folders] name, drafts, sent, or <account>.drafts/sent)
-        #[arg(long, value_delimiter = ',')]
-        folders: Vec<String>,
-        /// Only consider addresses seen in the last N days (default 0 = all)
-        #[arg(long)]
-        last: Option<u32>,
-        /// Allow selecting multiple addresses
         #[arg(long)]
         multi: bool,
         /// Print multiple selections one per line instead of comma-separated

@@ -11,8 +11,7 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   merged, resolved config (after local/global merge, `~` expansion, and path
   resolution), to debug path/editor/account resolution.
 - **Batch decompile** — decompile every message in a maildir (or a set of
-  Message-IDs), rather than one at a time. The index built by `mdmc index`
-  could drive this.
+  Message-IDs), rather than one at a time. Could be driven by a notmuch query.
 - **Tracking-pixel filter** — drop 1×1 images and known tracker domains when
   extracting attachments (deferred from the read-side design).
 - **Forwarded messages** — a nested `message/rfc822` part renders as nothing:

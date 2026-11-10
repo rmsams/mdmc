@@ -16,15 +16,14 @@ already marked `sent` unless `--again` is given. `mdmc reconcile` marks drafts
 `sent` once their message-id is in the account's sent maildir.
 
 `mdmc list <domain>` enumerates a domain to stdout (paths for `drafts` and
-`snapshots`, message-ids for `msgs`, `Name <email>` for `addr`), with `--json`
-for structured output. `mdmc pick <domain>` opens an interactive picker over
-the same four domains and prints the chosen value(s). `mdmc decompile` turns a
-raw message back into a markdown snapshot note. `mdmc view` prints a message
-as markdown to stdout with no attachment extraction and no `cid:` rewriting:
-by default a full snapshot note (frontmatter + body), or, with `--body-only`,
-just a subject/meta header + body — a terminal-reader mode. `mdmc index` builds
-the lookup index that `list`/`pick msgs` and `addr` query. `mdmc config` prints
-the effective (merged, resolved) config as TOML. None of them ever send.
+`snapshots`), with `--json` for structured output. `mdmc pick <domain>` opens an
+interactive picker over the same domains and prints the chosen value(s).
+`mdmc decompile` turns a raw message back into a markdown snapshot note.
+`mdmc view` prints a message as markdown to stdout with no attachment
+extraction and no `cid:` rewriting: by default a full snapshot note (frontmatter
++ body), or, with `--body-only`, just a subject/meta header + body — a
+terminal-reader mode. `mdmc config` prints the effective (merged, resolved)
+config as TOML. None of them ever send.
 
 ## Decompile
 
@@ -131,40 +130,20 @@ unquoted — when the draft carries `forward`.
 `multipart/mixed` body, preserving the original's attachments. The two modes
 are mutually exclusive.
 
-## Lookup index
+## List and pick
 
-`mdmc index` builds a local SQLite index of
-message metadata scoped by the `[index] query` notmuch query: for each file
-matching the query it reads only the header block and stores the message-id,
-`From` name/address, subject, date, and path. The index lives at `[paths]
-index`, defaulting to `$XDG_DATA_HOME/mdmc/index.db`. It is a manual, periodic
-batch — rebuild with `mdmc index` after syncing.
+`mdmc list drafts`/`list snapshots` print draft/snapshot file paths (one per
+line, or a JSON array with `--json`); `mdmc pick drafts`/`pick snapshots` open
+an interactive picker over the same entries and print the chosen path(s),
+comma-separated by default or one per line with `--lines`. Drafts are read from
+`[paths] source` (labelled by their frontmatter `status`), snapshots from
+`[paths] snapshots` (labelled by `date`/`title`). The picker page size defaults
+to `[lookup] page_size` (default 7).
 
-`mdmc list msgs`/`list addr` and `mdmc pick msgs`/`pick addr` query this index
-(never notmuch, so the slow address enumeration is off the interactive path):
-
-- `mdmc pick addr [--folders F] [--last N] [--multi] [--lines] [--page-size N]`
-  picks an address and prints `Name <email>`; addresses are deduplicated by
-  address, most recent first.
-- `mdmc pick msgs [--folders F] [--from A] [--last N] [--multi] [--lines]
-  [--page-size N]` picks a message (displayed as aligned
-  `sender | datetime | subject` columns) and prints its message-id.
-- `mdmc list addr [--folders F] [--last N] [--json]` and
-  `mdmc list msgs [--folders F] [--from A] [--last N] [--json]` print all
-  matches to stdout instead of opening a picker.
-- `--folders F` filters to a union of folders (comma-separated, logical OR): a
-  `[folders]` name, `drafts`/`sent` (every account's respective folder), or
-  `<account>.drafts`/`<account>.sent` (one account's folder).
-- `--last N` bounds by recency (`msgs` defaults to 30 days, `addr` to 0 = all);
-  `--from` is a case-insensitive substring on the sender's name or address.
-  Pickers emit multiple selections comma-separated by default, or one per line
-  with `--lines`; `list` emits one value per line and `--json` emits a JSON
-  array. Missing index is a hard error ("run `mdmc index` first").
-- The `[lookup]` section sets the defaults: `page_size` (picker rows, default
-  7), `msgs_last`, and `addr_last`; `--page-size`/`--last` override them.
-
-Selection is composable: `mdmc view "$(mdmc pick msgs)"` and
-`mdmc decompile "$(mdmc pick msgs)"`.
+Message and address lookup are deliberately out of scope. Message-id picking is
+`mfzf` (a home-manager shell helper over `notmuch search`), and address picking
+is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
+`To`/`Cc`/`Bcc` recipients of sent mail.
 
 ## Compile pipeline
 
@@ -194,7 +173,6 @@ attachments = "~/kb/attachments"     # bare-filename base for embeds and attachm
 pandoc_data = "~/.local/share/pandoc"
 mail = "~/Mail"                      # maildir root for Message-ID resolution
 snapshots = "~/kb/ops/mail/refs"     # decompiled snapshot notes
-index = "~/.local/share/mdmc/index.db"  # lookup-index db (defaults to XDG data dir)
 
 [accounts.rmsams-gmail]
 from = "rmsams@gmail.com"
@@ -205,13 +183,8 @@ sent = "~/Mail/rmsams-gmail.com/[Google Mail].Sent Mail"  # sent maildir
 [folders]
 refs = "~/Mail/rmsams-gmail.com/Reference"
 
-[index]
-query = "path:rmsams-gmail.com/** or path:rs-clearmatics.com/** or path:services/**"  # notmuch scope for `mdmc index`
-
 [lookup]
 page_size = 7    # picker rows (default 7)
-msgs_last = 30   # default --last for list/pick msgs (default 30)
-addr_last = 0    # default --last for list/pick addr (default 0 = all)
 
 [defaults]
 css = "email"
@@ -303,18 +276,16 @@ construction, so it does not validate; the schema is for external validation
 ## Module map
 
 - `addr.rs` — mailbox/address-list formatting helpers.
-- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[index]`/`[lookup]` resolution.
+- `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[lookup]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
 - `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
-- `index.rs` — the SQLite lookup index (build + query).
-- `list.rs` — the `list`/`pick drafts` and `list`/`pick snapshots` note selectors.
-- `lookup.rs` — the `list`/`pick msgs` and `list`/`pick addr` index selectors, plus the shared picker/output helpers.
+- `list.rs` — the `list`/`pick drafts` and `list`/`pick snapshots` note selectors, plus the shared picker/output helpers.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `maildir.rs` — maildir delivery/dedup helpers and the Message-ID scan fallback.
-- `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve, scoped file listing).
+- `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve only).
 - `quote.rs` — reply quoting and forward embedding (notmuch resolve + `mail-parser`).
 - `reply.rs` — reply envelope resolution (recipients + subject).
 - `util.rs` — hostname and Message-ID generation.

@@ -5,9 +5,7 @@ mod config;
 mod decompile;
 mod edit;
 mod frontmatter;
-mod index;
 mod list;
-mod lookup;
 mod maildir;
 mod mml;
 mod new;
@@ -96,38 +94,9 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
         Command::Reconcile => reconcile::reconcile(cfg),
         Command::Config => cfg.to_toml().map(|s| println!("{s}")),
         Command::View { input, body_only } => view::view(&input, body_only, cfg),
-        Command::Index => {
-            let query = cfg.index_query()?;
-            let db = cfg.paths_index();
-            let n = crate::index::build(query, &db)?;
-            println!("indexed {n} messages in {}", db.display());
-            Ok(())
-        }
         Command::List { domain } => match domain {
             ListDomain::Drafts { json } => list::list_drafts(json, cfg),
             ListDomain::Snapshots { json } => list::list_snapshots(json, cfg),
-            ListDomain::Msgs {
-                folders,
-                from,
-                last,
-                json,
-            } => lookup::list_msgs(
-                from.as_deref(),
-                last.unwrap_or_else(|| cfg.msgs_last()),
-                json,
-                &cfg.resolve_folders(&folders)?,
-                cfg,
-            ),
-            ListDomain::Addr {
-                folders,
-                last,
-                json,
-            } => lookup::list_addr(
-                last.unwrap_or_else(|| cfg.addr_last()),
-                json,
-                &cfg.resolve_folders(&folders)?,
-                cfg,
-            ),
         },
         Command::Pick { domain } => match domain {
             PickDomain::Drafts {
@@ -148,36 +117,6 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 multi,
                 lines,
                 page_size.unwrap_or_else(|| cfg.page_size()),
-                cfg,
-            ),
-            PickDomain::Msgs {
-                folders,
-                from,
-                last,
-                multi,
-                lines,
-                page_size,
-            } => lookup::pick_msgs(
-                from.as_deref(),
-                last.unwrap_or_else(|| cfg.msgs_last()),
-                multi,
-                lines,
-                page_size.unwrap_or_else(|| cfg.page_size()),
-                &cfg.resolve_folders(&folders)?,
-                cfg,
-            ),
-            PickDomain::Addr {
-                folders,
-                last,
-                multi,
-                lines,
-                page_size,
-            } => lookup::pick_addr(
-                last.unwrap_or_else(|| cfg.addr_last()),
-                multi,
-                lines,
-                page_size.unwrap_or_else(|| cfg.page_size()),
-                &cfg.resolve_folders(&folders)?,
                 cfg,
             ),
         },

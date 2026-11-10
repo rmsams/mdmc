@@ -39,35 +39,6 @@ pub fn resolve(id: &str, mail_root: Option<&Path>) -> Option<PathBuf> {
         .or_else(|| mail_root.and_then(|root| crate::maildir::find_message_in_tree(root, id)))
 }
 
-/// The file paths matching a notmuch query (for the index build), streamed
-/// from notmuch's stdout.
-pub(crate) fn search_files_with(bin: &str, query: &str) -> Result<Vec<PathBuf>, String> {
-    let mut child = std::process::Command::new(bin)
-        .args(["search", "--output=files", query])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("notmuch failed to start: {e}"))?;
-
-    let mut paths = Vec::new();
-    if let Some(stdout) = child.stdout.take() {
-        use std::io::BufRead;
-        for line in std::io::BufReader::new(stdout).lines() {
-            let line = line.map_err(|e| format!("cannot read notmuch output: {e}"))?;
-            if !line.is_empty() {
-                paths.push(PathBuf::from(line));
-            }
-        }
-    }
-    let status = child
-        .wait()
-        .map_err(|e| format!("notmuch wait failed: {e}"))?;
-    if !status.success() {
-        return Err("notmuch search failed".to_string());
-    }
-    Ok(paths)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
