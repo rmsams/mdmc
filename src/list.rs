@@ -74,43 +74,46 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
     entries
 }
 
-fn emit_paths(entries: Vec<Entry>, lines: bool) -> Result<(), String> {
-    emit_values(
-        entries
-            .into_iter()
-            .map(|e| e.path.display().to_string())
-            .collect(),
-        lines,
-    )
+/// Run the picker over `entries`, returning the chosen entries.
+fn select(
+    prompt: &str,
+    entries: Vec<Entry>,
+    multi: bool,
+    page_size: usize,
+) -> Result<Vec<Entry>, String> {
+    if multi {
+        pick_many(prompt, entries, page_size)
+    } else {
+        pick_one(prompt, entries, page_size)
+    }
+}
+
+/// Pick a single draft interactively and return its path (for `mdmc edit`).
+pub fn pick_draft_path(page_size: usize, cfg: &Config) -> Result<PathBuf, String> {
+    let dir = cfg.paths_source()?;
+    let entries = collect_entries(&dir, false);
+    let chosen = pick_one("draft", entries, page_size)?;
+    let entry = chosen
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no draft selected".to_string())?;
+    Ok(entry.path)
 }
 
 /// `pick drafts`: pick a draft and print its path.
-pub fn pick_drafts(multi: bool, lines: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
+pub fn pick_drafts(multi: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
     let dir = cfg.paths_source()?;
     let entries = collect_entries(&dir, false);
-    let chosen = if multi {
-        pick_many("draft", entries, page_size)?
-    } else {
-        pick_one("draft", entries, page_size)?
-    };
-    emit_paths(chosen, lines)
+    let chosen = select("draft", entries, multi, page_size)?;
+    print_values(chosen.into_iter().map(|e| e.path.display().to_string()))
 }
 
 /// `pick snapshots`: pick a snapshot and print its path.
-pub fn pick_snapshots(
-    multi: bool,
-    lines: bool,
-    page_size: usize,
-    cfg: &Config,
-) -> Result<(), String> {
+pub fn pick_snapshots(multi: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
     let dir = cfg.paths_snapshots()?;
     let entries = collect_entries(&dir, true);
-    let chosen = if multi {
-        pick_many("snapshot", entries, page_size)?
-    } else {
-        pick_one("snapshot", entries, page_size)?
-    };
-    emit_paths(chosen, lines)
+    let chosen = select("snapshot", entries, multi, page_size)?;
+    print_values(chosen.into_iter().map(|e| e.path.display().to_string()))
 }
 
 /// `list drafts`: print draft paths, or a JSON array with `--json`.
@@ -170,17 +173,6 @@ fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
     for value in values {
         writeln!(out, "{value}").map_err(|e| format!("write failed: {e}"))?;
     }
-    Ok(())
-}
-
-fn emit_values(values: Vec<String>, lines: bool) -> Result<(), String> {
-    if values.is_empty() {
-        return Ok(());
-    }
-    if lines {
-        return print_values(values.into_iter());
-    }
-    println!("{}", values.join(", "));
     Ok(())
 }
 

@@ -10,7 +10,8 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 shipped schema, and optionally opens `$EDITOR`. With `--reply <id>` or
 `--reply-all <id>`, it resolves the original message and auto-fills the
 envelope (see Reply); with `--forward <id>` it embeds the original at compile
-time (see Forward). `mdmc edit` opens an existing draft in `$EDITOR`.
+time (see Forward). `mdmc edit` opens an existing draft in `$EDITOR` — by slug,
+path, or Message-ID, or interactively picked when given no argument.
 `mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
 already marked `sent` unless `--again` is given. `mdmc reconcile` marks drafts
 `sent` once their message-id is in the account's sent maildir.
@@ -134,8 +135,8 @@ are mutually exclusive.
 
 `mdmc list drafts`/`list snapshots` print draft/snapshot file paths (one per
 line, or a JSON array with `--json`); `mdmc pick drafts`/`pick snapshots` open
-an interactive picker over the same entries and print the chosen path(s),
-comma-separated by default or one per line with `--lines`. Drafts are read from
+an interactive picker over the same entries and print the chosen path(s), one
+per line (comma-joining is not useful for paths). Drafts are read from
 `[paths] source` (labelled by their frontmatter `status`), snapshots from
 `[paths] snapshots` (labelled by `date`/`title`). The picker page size defaults
 to `[lookup] page_size` (default 7).

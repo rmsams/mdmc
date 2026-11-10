@@ -82,8 +82,8 @@ pub enum Command {
     },
     /// Open a draft in $EDITOR
     Edit {
-        /// Draft slug, path, or Message-ID to open
-        input: String,
+        /// Draft slug, path, or Message-ID to open; omit to pick a draft interactively
+        input: Option<String>,
         /// Editor name from [editors] (default: first configured, else $EDITOR)
         #[arg(long)]
         editor: Option<String>,
@@ -160,9 +160,6 @@ pub enum PickDomain {
         /// Allow selecting multiple drafts
         #[arg(long)]
         multi: bool,
-        /// Print multiple selections one per line instead of comma-separated
-        #[arg(long)]
-        lines: bool,
         /// Number of picker rows to show (default: [lookup] page_size)
         #[arg(long = "page-size")]
         page_size: Option<usize>,
@@ -172,9 +169,6 @@ pub enum PickDomain {
         /// Allow selecting multiple snapshots
         #[arg(long)]
         multi: bool,
-        /// Print multiple selections one per line instead of comma-separated
-        #[arg(long)]
-        lines: bool,
         /// Number of picker rows to show (default: [lookup] page_size)
         #[arg(long = "page-size")]
         page_size: Option<usize>,

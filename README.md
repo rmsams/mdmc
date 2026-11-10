@@ -85,10 +85,12 @@ Use `--forward-attach` instead to embed the full original message (headers,
 attachments and all) as a `message/rfc822` attachment — proper MIME
 forwarding.
 
-Open an existing draft in `$EDITOR` — by slug, path, or Message-ID.
-`--editor <name>` selects a named editor from `[editors]`:
+Open an existing draft in `$EDITOR` — by slug, path, or Message-ID. With no
+argument, it opens an interactive picker (`mdmc edit` = `mdmc edit "$(mdmc pick
+drafts)"`). `--editor <name>` selects a named editor from `[editors]`:
 
 ```sh
+mdmc edit                       # pick a draft, then open it
 mdmc edit hello
 mdmc edit abc123@x
 mdmc edit hello --editor obsidian
@@ -122,16 +124,15 @@ mdmc list drafts               # draft file paths
 mdmc list snapshots            # snapshot file paths
 ```
 
-Or interactively pick one (or several with `--multi`):
+Or interactively pick one (or several with `--multi`), printing one path per
+line:
 
 ```sh
 mdmc pick drafts
 mdmc pick snapshots
 ```
 
-Both `list` and `pick` support `--json` for structured output, and `pick
---multi` prints selections comma-separated by default (or one per line with
-`--lines`).
+`list` supports `--json` for structured output.
 
 Print the effective (merged, resolved) config as TOML:
 

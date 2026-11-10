@@ -4,7 +4,7 @@
 .SH NAME
 mdmc\-edit \- Open a draft in $EDITOR
 .SH SYNOPSIS
-\fBmdmc edit\fR [\fB\-\-config\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
+\fBmdmc edit\fR [\fB\-\-config\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIINPUT\fR] 
 .SH DESCRIPTION
 Open a draft in $EDITOR
 .SH OPTIONS
@@ -18,5 +18,5 @@ Editor name from [editors] (default: first configured, else $EDITOR)
 \fB\-h\fR, \fB\-\-help\fR
 Print help
 .TP
-<\fIINPUT\fR>
-Draft slug, path, or Message\-ID to open
+[\fIINPUT\fR]
+Draft slug, path, or Message\-ID to open; omit to pick a draft interactively

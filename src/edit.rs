@@ -4,11 +4,15 @@ use crate::config::Config;
 use crate::frontmatter;
 
 /// Open a draft in an editor, resolving a slug, path, or Message-ID to a
-/// draft. The editor is a `--editor` name, else the first configured editor,
-/// else `$EDITOR`. Never sends.
-pub fn edit(input: &str, editor: Option<&str>, cfg: &Config) -> Result<(), String> {
+/// draft. With no input, pick a draft interactively (`mdmc pick drafts`).
+/// The editor is a `--editor` name, else the first configured editor, else
+/// `$EDITOR`. Never sends.
+pub fn edit(input: Option<&str>, editor: Option<&str>, cfg: &Config) -> Result<(), String> {
     let source_dir = cfg.paths_source()?;
-    let path = resolve_draft(input, &source_dir)?;
+    let path = match input {
+        Some(arg) => resolve_draft(arg, &source_dir)?,
+        None => crate::list::pick_draft_path(cfg.page_size(), cfg)?,
+    };
     let command = cfg.editor(editor)?;
     crate::util::run_editor_command(&command, &path);
     Ok(())
