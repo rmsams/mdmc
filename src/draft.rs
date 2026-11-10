@@ -11,15 +11,25 @@ use crate::frontmatter::{self, Field};
 /// drafts maildir (decompiled to a `mail-draft` in the source directory). With
 /// no input, pick a draft interactively. The editor is a `--editor` name, else
 /// the first configured editor, else `$EDITOR`. Prints the draft path after the
-/// editor closes. Never sends.
-pub fn draft(input: Option<&str>, editor: Option<&str>, cfg: &Config) -> Result<(), String> {
+/// editor closes, unless `--compile` is given, in which case it compiles the
+/// draft back to the drafts maildir instead. Never sends.
+pub fn draft(
+    input: Option<&str>,
+    editor: Option<&str>,
+    compile: bool,
+    cfg: &Config,
+) -> Result<(), String> {
     let path = match input {
         Some(arg) => resolve_draft_or_create(arg, cfg)?,
         None => crate::list::pick_draft_path(cfg.page_size(), cfg)?,
     };
     let command = cfg.editor(editor)?;
     crate::util::run_editor_command(&command, &path);
-    println!("{}", path.display());
+    if compile {
+        crate::compile::compile(false, None, false, &path.display().to_string(), cfg)?;
+    } else {
+        println!("{}", path.display());
+    }
     Ok(())
 }
 

@@ -79,7 +79,11 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             encrypt,
             editor,
         ),
-        Command::Draft { input, editor } => draft::draft(input.as_deref(), editor.as_deref(), cfg),
+        Command::Draft {
+            input,
+            editor,
+            compile,
+        } => draft::draft(input.as_deref(), editor.as_deref(), compile, cfg),
         Command::Compile {
             draft,
             stdout,

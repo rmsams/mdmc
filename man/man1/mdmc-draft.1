@@ -4,7 +4,7 @@
 .SH NAME
 mdmc\-draft \- Open a draft in $EDITOR, importing it from a drafts maildir when its markdown doesn\*(Aqt exist yet
 .SH SYNOPSIS
-\fBmdmc draft\fR [\fB\-\-config\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIINPUT\fR] 
+\fBmdmc draft\fR [\fB\-\-config\fR] [\fB\-\-editor\fR] [\fB\-\-compile\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIINPUT\fR] 
 .SH DESCRIPTION
 Open a draft in $EDITOR, importing it from a drafts maildir when its markdown doesn\*(Aqt exist yet
 .SH OPTIONS
@@ -14,6 +14,9 @@ Path to config.toml (default ~/.config/mdmc/config.toml)
 .TP
 \fB\-\-editor\fR \fI<EDITOR>\fR
 Editor name from [editors] (default: first configured, else $EDITOR)
+.TP
+\fB\-\-compile\fR
+Compile the draft back to the drafts maildir after the editor closes
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

@@ -87,6 +87,9 @@ pub enum Command {
         /// Editor name from [editors] (default: first configured, else $EDITOR)
         #[arg(long)]
         editor: Option<String>,
+        /// Compile the draft back to the drafts maildir after the editor closes
+        #[arg(long)]
+        compile: bool,
     },
     /// Compile a draft to a message (RFC 5322)
     Compile {
