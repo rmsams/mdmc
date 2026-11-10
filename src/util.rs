@@ -14,12 +14,30 @@ pub fn gen_message_id() -> String {
 
 /// Run an editor command string on a file via `sh -c`, with the file path
 /// available as `$1` (and `$@`). The command must reference `$1`/`$@` where the
-/// path belongs — e.g. `emacsclient -t "$@"` or `obs open path="$1"`.
+/// path belongs — e.g. `emacsclient -t "$@"` or `obs open path="$1"`. The
+/// editor's stdio is redirected to `/dev/tty` so it stays interactive even when
+/// mdmc's own stdout is captured, falling back to inheritance when there is no
+/// controlling terminal.
 pub fn run_editor_command(command: &str, path: &std::path::Path) {
-    let _ = std::process::Command::new("sh")
-        .args(["-c", command, "mdmc-editor"])
-        .arg(path)
-        .status();
+    use std::process::Stdio;
+    let mut cmd = std::process::Command::new("sh");
+    cmd.args(["-c", command, "mdmc-editor"]).arg(path);
+    if let Ok(tty) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")
+    {
+        if let Ok(t) = tty.try_clone() {
+            cmd.stdin(Stdio::from(t));
+        }
+        if let Ok(t) = tty.try_clone() {
+            cmd.stdout(Stdio::from(t));
+        }
+        if let Ok(t) = tty.try_clone() {
+            cmd.stderr(Stdio::from(t));
+        }
+    }
+    let _ = cmd.status();
 }
 
 #[cfg(test)]
