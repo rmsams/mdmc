@@ -13,7 +13,9 @@ envelope (see Reply); with `--forward <id>` it embeds the original at compile
 time (see Forward). `mdmc draft` opens a draft in `$EDITOR` — by slug, path, or
 Message-ID, or interactively picked when given no argument. When the Message-ID
 has no markdown draft yet, it is imported from the account's drafts maildir
-(decompiled to a `mail-draft` in `paths.source`, `status: pending`). After the
+(decompiled to a `mail-draft` in `paths.source`, `status: pending`, carrying the
+message's `to`/`cc`/`bcc` and — for a reply — `in-reply-to`/`references` with
+`quote: none` so the already-quoted body is not re-quoted). After the
 editor closes it prints the path, or with `--compile` compiles the draft back to
 the drafts maildir instead.
 `mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
@@ -124,7 +126,9 @@ additionally fills `cc` with every original `To`/`Cc` mailbox, minus the sender
 and minus the account's own `from` address, and allows `--to`/`--cc` to override
 the auto-filled values. The subject is prefixed with `Re: ` unless it already
 has the prefix; an explicit `--subject` overrides it. The `in-reply-to` and
-`quote: auto` fields are always written.
+`quote: auto` fields are always written, and `references` is written as the
+original's `References` chain plus its own `Message-ID` (so a reply into a deep
+thread preserves the full ancestry).
 
 ## Forward
 
@@ -172,7 +176,9 @@ is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
 7. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
    crate (`compiler` feature only, no `cli`).
 8. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
-   restore CRLF.
+   restore CRLF. `In-Reply-To` is the draft's `in-reply-to` field; `References`
+   is the draft's full `references` chain, falling back to the single
+   `in-reply-to` id when no chain is present.
 9. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
    the account's `drafts` maildir (then write `status: pending` back to the draft).
 

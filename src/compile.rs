@@ -21,6 +21,26 @@ fn list_draft_stems(drafts_dir: &Path) -> Vec<String> {
     stems
 }
 
+/// Build the `In-Reply-To`/`References` header lines for a reply. The
+/// `References` chain is taken verbatim from the draft's `references` field;
+/// when absent, it falls back to the single `in-reply-to` id.
+fn reply_headers(in_reply_to: &str, references: &[String]) -> [String; 2] {
+    let refs: Vec<&str> = if references.is_empty() {
+        vec![in_reply_to]
+    } else {
+        references.iter().map(String::as_str).collect()
+    };
+    let refs_hdr = refs
+        .iter()
+        .map(|r| format!("<{r}>"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    [
+        format!("In-Reply-To: <{in_reply_to}>"),
+        format!("References: {refs_hdr}"),
+    ]
+}
+
 fn inject_headers(message: &str, headers: &[String]) -> String {
     let mut out_lines: Vec<&str> = Vec::new();
     for line in message.split('\n') {
@@ -175,13 +195,7 @@ fn compile_message(
     message = message.replace("\r\n", "\n");
 
     if !in_reply_to.is_empty() {
-        message = inject_headers(
-            &message,
-            &[
-                format!("In-Reply-To: <{in_reply_to}>"),
-                format!("References: <{in_reply_to}>"),
-            ],
-        );
+        message = inject_headers(&message, &reply_headers(in_reply_to, &fm.references.0));
     }
 
     Ok(message.replace('\n', "\r\n"))
@@ -399,6 +413,31 @@ mod tests {
         let out = inject_headers(msg, &["In-Reply-To: <new>".to_string()]);
         assert!(!out.contains("old"));
         assert!(out.contains("In-Reply-To: <new>"));
+    }
+
+    #[test]
+    fn reply_headers_falls_back_to_in_reply_to() {
+        let h = reply_headers("x@y", &[]);
+        assert_eq!(
+            h,
+            [
+                "In-Reply-To: <x@y>".to_string(),
+                "References: <x@y>".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn reply_headers_uses_full_references_chain() {
+        let refs = vec!["a@x".to_string(), "b@x".to_string()];
+        let h = reply_headers("c@x", &refs);
+        assert_eq!(
+            h,
+            [
+                "In-Reply-To: <c@x>".to_string(),
+                "References: <a@x> <b@x>".to_string()
+            ]
+        );
     }
 
     #[test]

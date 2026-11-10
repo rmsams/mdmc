@@ -45,6 +45,8 @@ pub struct Draft {
     pub message_id: Option<String>,
     #[serde(rename = "in-reply-to", default)]
     pub in_reply_to: Option<String>,
+    #[serde(rename = "references", default)]
+    pub references: StringList,
     #[serde(default)]
     pub quote: Option<String>,
     #[serde(default)]

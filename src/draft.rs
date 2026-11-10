@@ -166,6 +166,19 @@ fn build_draft_fields(message: &Message, message_id: &str, account: &str) -> Vec
     if let Some(cc) = message.cc().filter(|l| !l.is_empty()) {
         fields.push(("cc".to_string(), Field::List(addresses(&cc))));
     }
+    if let Some(bcc) = message.bcc().filter(|l| !l.is_empty()) {
+        fields.push(("bcc".to_string(), Field::List(addresses(&bcc))));
+    }
+    if let Some(irt) = message.in_reply_to().and_then(|list| list.first()) {
+        fields.push(("in-reply-to".to_string(), Field::Str(irt.to_string())));
+        fields.push(("quote".to_string(), Field::Str("none".to_string())));
+    }
+    if let Some(references) = message.references().filter(|l| !l.is_empty()) {
+        fields.push((
+            "references".to_string(),
+            Field::List(references.iter().map(str::to_string).collect()),
+        ));
+    }
     fields
 }
 
@@ -225,8 +238,11 @@ mod tests {
             concat!(
                 "From: Me <me@example.com>\r\n",
                 "To: Ann <ann@example.com>\r\n",
+                "Bcc: Bob <bob@example.com>\r\n",
                 "Subject: Hello World\r\n",
                 "Message-ID: <abc@x>\r\n",
+                "In-Reply-To: <orig@x>\r\n",
+                "References: <root@x> <orig@x>\r\n",
                 "\r\n",
                 "hi there\r\n",
             ),
@@ -255,6 +271,10 @@ mod tests {
         assert!(text.contains("type: mail-draft"));
         assert!(text.contains("status: pending"));
         assert!(text.contains("message-id: abc@x"));
+        assert!(text.contains("in-reply-to: orig@x"));
+        assert!(text.contains("quote: none"));
+        assert!(text.contains("bcc:\n  - Bob <bob@example.com>\n"));
+        assert!(text.contains("references:\n  - root@x\n  - orig@x\n"));
         assert!(text.contains("account: acct"));
         assert!(text.contains("hi there"));
         std::fs::remove_dir_all(&dir).ok();

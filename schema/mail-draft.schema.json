@@ -62,6 +62,12 @@
     "in-reply-to": {
       "type": "string"
     },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "quote": {
       "type": "string",
       "enum": [

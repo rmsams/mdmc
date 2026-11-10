@@ -74,6 +74,19 @@ fn prefixed_subject(message: &Message) -> Option<String> {
     }
 }
 
+/// The full `References` chain for a reply to `message`: its own `references`
+/// header (when present) followed by its `Message-ID`.
+pub fn references(message: &Message) -> Vec<String> {
+    let mut refs: Vec<String> = message
+        .references()
+        .map(|list| list.iter().map(str::to_string).collect())
+        .unwrap_or_default();
+    if let Some(id) = message.message_id() {
+        refs.push(id.to_string());
+    }
+    refs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +152,17 @@ mod tests {
         let message = parse("From: Ann <ann@example.com>\r\nSubject: Re: Lunch\r\n\r\nBody\r\n");
         let env = envelope(&message, "me@self.com", false).unwrap();
         assert_eq!(env.subject.as_deref(), Some("Re: Lunch"));
+    }
+
+    #[test]
+    fn references_is_just_message_id_when_no_chain() {
+        let message = parse("Message-ID: <a@x>\r\n\r\nBody\r\n");
+        assert_eq!(references(&message), vec!["a@x"]);
+    }
+
+    #[test]
+    fn references_appends_message_id_to_chain() {
+        let message = parse("Message-ID: <c@x>\r\nReferences: <a@x> <b@x>\r\n\r\nBody\r\n");
+        assert_eq!(references(&message), vec!["a@x", "b@x", "c@x"]);
     }
 }

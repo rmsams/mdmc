@@ -121,14 +121,15 @@ pub fn new(
     let acct = cfg.resolve_account(&acct_name)?;
     let self_addr = acct.from.as_deref().unwrap_or("").to_string();
 
-    let (reply_to, reply_cc, reply_subject) = match &in_reply_to {
+    let (reply_to, reply_cc, reply_subject, reply_references) = match &in_reply_to {
         Some(irt) => {
             let mail_root = cfg.paths_mail()?;
             let message = crate::reply::resolve(irt, &mail_root)?;
             let env = crate::reply::envelope(&message, &self_addr, reply_all_mode)?;
-            (env.to, env.cc, env.subject)
+            let refs = crate::reply::references(&message);
+            (env.to, env.cc, env.subject, refs)
         }
-        None => (Vec::new(), Vec::new(), None),
+        None => (Vec::new(), Vec::new(), None, Vec::new()),
     };
 
     let forward_id = forward.as_deref().or(forward_attach.as_deref());
@@ -185,6 +186,9 @@ pub fn new(
     if let Some(in_reply_to) = &in_reply_to {
         fields.push(("in-reply-to".to_string(), Field::Str(in_reply_to.clone())));
         fields.push(("quote".to_string(), Field::Str("auto".to_string())));
+    }
+    if !reply_references.is_empty() {
+        fields.push(("references".to_string(), Field::List(reply_references)));
     }
     if let Some(forward) = &forward {
         fields.push(("forward".to_string(), Field::Str(forward.clone())));
@@ -382,7 +386,46 @@ mod tests {
         assert!(text.contains("to:\n  - Ann <ann@example.com>\n"));
         assert!(text.contains("in-reply-to: m1@example.com\n"));
         assert!(text.contains("quote: auto\n"));
+        assert!(text.contains("references:\n  - m1@example.com\n"));
         assert!(!text.contains("cc:"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_builds_references_chain() {
+        let (dir, cfg, source) = setup_maildir();
+        std::fs::write(
+            dir.join("mail").join("acct").join("cur").join("m2"),
+            concat!(
+                "From: Ann <ann@example.com>\r\n",
+                "To: Bob <bob@example.com>\r\n",
+                "Subject: Deep Thread\r\n",
+                "Message-ID: <m2@example.com>\r\n",
+                "References: <root@example.com> <m1@example.com>\r\n",
+                "\r\n",
+                "Body\r\n",
+            ),
+        )
+        .unwrap();
+
+        run_new(
+            &cfg,
+            Some("m2@example.com"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("re-deep-thread.md")).unwrap();
+        assert!(text.contains("in-reply-to: m2@example.com\n"));
+        assert!(text.contains(
+            "references:\n  - root@example.com\n  - m1@example.com\n  - m2@example.com\n"
+        ));
 
         std::fs::remove_dir_all(&dir).ok();
     }
