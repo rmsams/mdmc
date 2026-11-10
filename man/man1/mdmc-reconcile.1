@@ -2,15 +2,17 @@
 .el .ds Aq '
 .TH mdmc-reconcile 1  "reconcile " 
 .SH NAME
-mdmc\-reconcile \- Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+mdmc\-reconcile \- Sync draft status with the maildirs (forward\-only)
 .SH SYNOPSIS
 \fBmdmc reconcile\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
-Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+Sync draft status with the maildirs (forward\-only)
+.PP
+Marks a draft `pending` when its message\-id is in the account\*(Aqs drafts maildir, and `sent` when it is in the sent maildir. Never downgrades: `pending` is not regressed to `draft`, and `sent` is terminal. A message found in both drafts and sent is marked `sent` with a warning about the stale drafts copy.
 .SH OPTIONS
 .TP
 \fB\-\-config\fR \fI<CONFIG>\fR
 Path to config.toml (default ~/.config/mdmc/config.toml)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
-Print help
+Print help (see a summary with \*(Aq\-h\*(Aq)

@@ -10,11 +10,18 @@ tool. It compiles markdown drafts to RFC 5322 email and never sends.
 shipped schema, and optionally opens `$EDITOR`. With `--reply <id>` or
 `--reply-all <id>`, it resolves the original message and auto-fills the
 envelope (see Reply); with `--forward <id>` it embeds the original at compile
-time (see Forward). `mdmc edit` opens an existing draft in `$EDITOR` — by slug,
-path, or Message-ID, or interactively picked when given no argument.
+time (see Forward). `mdmc draft` opens a draft in `$EDITOR` — by slug, path, or
+Message-ID, or interactively picked when given no argument. When the Message-ID
+has no markdown draft yet, it is imported from the account's drafts maildir
+(decompiled to a `mail-draft` in `paths.source`, `status: pending`), then the
+editor opens and the path is printed on close.
 `mdmc compile` compiles a draft to RFC 5322 and delivers it, refusing a draft
-already marked `sent` unless `--again` is given. `mdmc reconcile` marks drafts
-`sent` once their message-id is in the account's sent maildir.
+already marked `sent` unless `--again` is given. `mdmc reconcile` syncs each
+draft's `status` with where its message actually lives, forward-only: `pending`
+when in the account's drafts maildir, `sent` when in the sent maildir. It never
+downgrades — `pending` is not regressed to `draft`, `sent` is terminal — and a
+message found in both drafts and sent is marked `sent` with a warning about the
+stale drafts copy.
 
 `mdmc list <domain>` enumerates a domain to stdout (paths for `drafts` and
 `snapshots`), with `--json` for structured output. `mdmc pick <domain>` opens an
@@ -76,11 +83,14 @@ preserved, not just the filename. A tracking-pixel filter is deferred.
 
 ## Status lifecycle
 
-A draft's `status` moves `draft` (created, no message-id) → `pending`
-(compiled and delivered to the drafts maildir) → `sent` (confirmed present in
-the sent maildir). `reconcile` does the last transition by scanning `paths.source`
-and, for each draft that is not yet `sent`, looking up its message-id in the
-account's `sent` maildir.
+A draft's `status` moves `draft` (created by `mdmc new`, message-id assigned at
+creation) → `pending` (compiled and delivered to the drafts maildir) → `sent`
+(confirmed present in the sent maildir). `compile` does the first transition.
+`reconcile` syncs status forward-only by scanning `paths.source` and, for each
+non-`sent` draft, looking up its message-id in the account's maildirs: in `sent`
+→ mark `sent` (warning when a stale drafts copy remains); else in `drafts` →
+mark `pending`. It never downgrades — `pending` is not regressed to `draft`,
+and `sent` is terminal.
 
 ## Message-id semantics
 
@@ -204,7 +214,7 @@ command = "obs open path=\"$1\""
 An editor is a `sh -c` command string with the file path available as `$1` (or
 `$@`); the command references it where the path belongs — positional for a
 conventional editor (`emacsclient -t "$@"`), key-value for `obs`
-(`obs open path="$1"`). `mdmc edit` uses `--editor <name>`, else the first
+(`obs open path="$1"`). `mdmc draft` uses `--editor <name>`, else the first
 `[[editors]]` entry, else `$VISUAL`/`$EDITOR` (with `"$@"` appended).
 
 mdmc resolves its config in this order:
@@ -280,7 +290,7 @@ construction, so it does not validate; the schema is for external validation
 - `config.rs` — config.toml loading, `~` expansion, `[accounts]`/`[folders]`/`[lookup]` resolution.
 - `compile.rs` — the `compile` subcommand (compile + maildir delivery).
 - `decompile.rs` — the `decompile` subcommand (raw message → markdown snapshot).
-- `edit.rs` — the `edit` subcommand (open a draft in `$EDITOR`).
+- `draft.rs` — the `draft` subcommand (open a draft in `$EDITOR`, importing it from a drafts maildir when absent).
 - `frontmatter.rs` — `---`-delimited YAML → `Draft`; schema validation; ordered YAML rendering; `set_fields` in-place rewrite.
 - `list.rs` — the `list`/`pick drafts` and `list`/`pick snapshots` note selectors, plus the shared picker/output helpers.
 - `new.rs` — the `new` subcommand (draft creation).

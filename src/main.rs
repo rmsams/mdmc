@@ -3,7 +3,7 @@ mod cli;
 mod compile;
 mod config;
 mod decompile;
-mod edit;
+mod draft;
 mod frontmatter;
 mod list;
 mod maildir;
@@ -79,7 +79,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             encrypt,
             editor,
         ),
-        Command::Edit { input, editor } => edit::edit(input.as_deref(), editor.as_deref(), cfg),
+        Command::Draft { input, editor } => draft::draft(input.as_deref(), editor.as_deref(), cfg),
         Command::Compile {
             draft,
             stdout,

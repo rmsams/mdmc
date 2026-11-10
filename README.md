@@ -85,15 +85,16 @@ Use `--forward-attach` instead to embed the full original message (headers,
 attachments and all) as a `message/rfc822` attachment — proper MIME
 forwarding.
 
-Open an existing draft in `$EDITOR` — by slug, path, or Message-ID. With no
-argument, it opens an interactive picker (`mdmc edit` = `mdmc edit "$(mdmc pick
-drafts)"`). `--editor <name>` selects a named editor from `[editors]`:
+Open a draft in `$EDITOR` — by slug, path, or Message-ID. When the Message-ID
+has no markdown draft yet, it is imported from the account's drafts maildir.
+With no argument, it opens an interactive picker. `--editor <name>` selects a
+named editor from `[editors]`:
 
 ```sh
-mdmc edit                       # pick a draft, then open it
-mdmc edit hello
-mdmc edit abc123@x
-mdmc edit hello --editor obsidian
+mdmc draft                       # pick a draft, then open it
+mdmc draft hello
+mdmc draft abc123@x              # import from the drafts maildir if absent
+mdmc draft hello --editor obsidian
 ```
 
 Compile it and print to stdout:
@@ -111,7 +112,9 @@ mdmc compile hello
 A draft already marked `sent` is refused unless you pass `--again` (recompile a
 sent draft):
 
-Mark drafts sent once their message-id is in the account's sent maildir:
+Sync draft status with the maildirs (forward-only): mark drafts `pending` when
+their message-id is in the account's drafts maildir, and `sent` when it is in
+the sent maildir:
 
 ```sh
 mdmc reconcile
@@ -219,7 +222,7 @@ command = "obs open path=\"$1\""
 ```
 
 An editor is a `sh -c` command string with the file path available as `$1`/`$@`.
-`mdmc edit` uses `--editor <name>`, else the first `[[editors]]` entry, else
+`mdmc draft` uses `--editor <name>`, else the first `[[editors]]` entry, else
 `$EDITOR`.
 
 An asset name without a `/` resolves under `pandoc_data` (filters, templates,

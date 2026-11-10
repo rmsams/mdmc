@@ -52,7 +52,7 @@ fn split_addresses(value: &str) -> Vec<String> {
     parts
 }
 
-fn slugify(text: &str) -> String {
+pub(crate) fn slugify(text: &str) -> String {
     let mut slug = String::new();
     let mut last_dash = false;
     for c in text.to_lowercase().chars() {

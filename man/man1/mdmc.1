@@ -22,8 +22,8 @@ Print version
 mdmc\-new(1)
 Create a new email draft
 .TP
-mdmc\-edit(1)
-Open a draft in $EDITOR
+mdmc\-draft(1)
+Open a draft in $EDITOR, importing it from a drafts maildir when its markdown doesn\*(Aqt exist yet
 .TP
 mdmc\-compile(1)
 Compile a draft to a message (RFC 5322)
@@ -32,7 +32,7 @@ mdmc\-decompile(1)
 Decompile a message to a markdown snapshot note
 .TP
 mdmc\-reconcile(1)
-Mark drafts sent when their message\-id is in the account\*(Aqs sent maildir
+Sync draft status with the maildirs (forward\-only)
 .TP
 mdmc\-pick(1)
 Pick a draft or snapshot (interactive)

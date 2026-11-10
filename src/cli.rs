@@ -80,9 +80,9 @@ pub enum Command {
         #[arg(long)]
         editor: bool,
     },
-    /// Open a draft in $EDITOR
-    Edit {
-        /// Draft slug, path, or Message-ID to open; omit to pick a draft interactively
+    /// Open a draft in $EDITOR, importing it from a drafts maildir when its markdown doesn't exist yet
+    Draft {
+        /// Draft slug, path, or Message-ID; omit to pick a draft interactively
         input: Option<String>,
         /// Editor name from [editors] (default: first configured, else $EDITOR)
         #[arg(long)]
@@ -113,7 +113,13 @@ pub enum Command {
         #[arg(long = "link-attachments")]
         link_attachments: bool,
     },
-    /// Mark drafts sent when their message-id is in the account's sent maildir.
+    /// Sync draft status with the maildirs (forward-only)
+    ///
+    /// Marks a draft `pending` when its message-id is in the account's drafts
+    /// maildir, and `sent` when it is in the sent maildir. Never downgrades:
+    /// `pending` is not regressed to `draft`, and `sent` is terminal. A message
+    /// found in both drafts and sent is marked `sent` with a warning about the
+    /// stale drafts copy.
     Reconcile,
     /// Pick a draft or snapshot (interactive).
     Pick {
