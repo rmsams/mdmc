@@ -230,7 +230,13 @@ fn html_to_gfm(
     cid_map: &[(String, String)],
     wikilinks: bool,
 ) -> Result<String, String> {
-    let mut args: Vec<String> = vec!["-f".into(), "html".into(), "-t".into(), "gfm".into()];
+    let mut args: Vec<String> = vec![
+        "-f".into(),
+        "html".into(),
+        "-t".into(),
+        "gfm-raw_html".into(),
+        "--wrap=none".into(),
+    ];
     let mut filter_tmp = None;
     if !cid_map.is_empty() {
         let path = write_temp_filter(&build_cid_filter(cid_map, wikilinks))?;
