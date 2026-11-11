@@ -16,7 +16,7 @@ mod reply;
 mod util;
 mod view;
 
-use cli::{Cli, Command, ListDomain, PickDomain, UtilCommand};
+use cli::{Cli, Command, ListDomain, PickDomain, SchemaType};
 
 use clap::Parser;
 
@@ -119,11 +119,17 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 list::pick_snapshots(multi, page_size.unwrap_or_else(|| cfg.page_size()), cfg)
             }
         },
-        Command::Utils { command } => match command {
-            UtilCommand::Hash { id } => {
-                println!("{}", util::hash_message_id(&id));
-                Ok(())
-            }
-        },
+        Command::Schema { schema } => {
+            let s = match schema {
+                SchemaType::MailDraft => frontmatter::mail_draft_schema(),
+                SchemaType::MailSnapshot => frontmatter::mail_snapshot_schema(),
+            };
+            println!("{s}");
+            Ok(())
+        }
+        Command::Hash { id } => {
+            println!("{}", util::hash_message_id(&id));
+            Ok(())
+        }
     }
 }

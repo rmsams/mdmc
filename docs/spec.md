@@ -34,8 +34,9 @@ interactive picker over the same domains and prints the chosen value(s).
 extraction and no `cid:` rewriting: by default a full snapshot note (frontmatter
 + body), or, with `--body-only`, just a subject/meta header + body — a
 terminal-reader mode. `mdmc config` prints the effective (merged, resolved)
-config as TOML. `mdmc utils hash <id>` prints the snapshot-naming digest of a
-Message-ID. None of them ever send.
+config as TOML. `mdmc schema <type>` prints a shipped JSON Schema to stdout
+(`mail-draft` or `mail-snapshot`). `mdmc hash <id>` prints the snapshot-naming
+digest of a Message-ID. None of them ever send.
 
 ## Decompile
 
@@ -103,8 +104,8 @@ hash(id) = hex(sha256(utf8(strip_brackets(id)))[..16])
 i.e. the first 16 bytes of the SHA-256 of the UTF-8 encoding of the Message-ID
 with its surrounding angle brackets stripped, rendered as 32 lowercase hex
 characters. First-`N` truncation matches the universal convention (git's short
-SHA); there is no case folding and no further normalisation. `mdmc utils hash
-<id>` reproduces it, so any consumer can compute `msgid → path` without mdmc.
+SHA); there is no case folding and no further normalisation. `mdmc hash <id>`
+reproduces it, so any consumer can compute `msgid → path` without mdmc.
 
 Filename rules (snapshot domain only — drafts keep title slugs):
 
@@ -361,6 +362,9 @@ The read side's `mail-snapshot` schema ships at
 `schema/mail-snapshot.schema.json`. `decompile` generates valid frontmatter by
 construction, so it does not validate; the schema is for external validation
 (e.g. `kb-validate`).
+
+Both schemas are embedded and exported via `mdmc schema <mail-draft|mail-snapshot>`,
+so external tooling can consume the contract without reading the source tree.
 
 ## Module map
 

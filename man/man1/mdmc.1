@@ -28,25 +28,28 @@ Open a draft in $EDITOR, importing it from a drafts maildir when its markdown do
 mdmc\-compile(1)
 Compile a draft to a message (RFC 5322)
 .TP
-mdmc\-decompile(1)
-Decompile a message to a markdown snapshot note
-.TP
 mdmc\-reconcile(1)
 Sync draft status with the maildirs (forward\-only)
 .TP
-mdmc\-pick(1)
-Pick a draft or snapshot (interactive)
-.TP
-mdmc\-list(1)
-List drafts or snapshots to stdout
+mdmc\-decompile(1)
+Decompile a message to a markdown snapshot note
 .TP
 mdmc\-view(1)
 Print a message as markdown to stdout (no attachment extraction)
 .TP
+mdmc\-list(1)
+List drafts or snapshots to stdout
+.TP
+mdmc\-pick(1)
+Pick a draft or snapshot (interactive)
+.TP
 mdmc\-config(1)
 Print the effective (merged, resolved) config as TOML
 .TP
-mdmc\-utils(1)
-Utility helpers
+mdmc\-schema(1)
+Print a shipped JSON Schema to stdout
+.TP
+mdmc\-hash(1)
+Print the snapshot\-naming digest of a Message\-ID
 .SH VERSION
 v0.1.0

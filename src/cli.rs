@@ -125,6 +125,14 @@ pub enum Command {
         #[arg(long)]
         again: bool,
     },
+    /// Sync draft status with the maildirs (forward-only)
+    ///
+    /// Marks a draft `pending` when its message-id is in the account's drafts
+    /// maildir, and `sent` when it is in the sent maildir. Never downgrades:
+    /// `pending` is not regressed to `draft`, and `sent` is terminal. A message
+    /// found in both drafts and sent is marked `sent` with a warning about the
+    /// stale drafts copy.
+    Reconcile,
     /// Decompile a message to a markdown snapshot note
     Decompile {
         /// Message-ID, a raw message file path, or `-` for stdin
@@ -139,24 +147,6 @@ pub enum Command {
         #[arg(long = "link-format")]
         link_format: Option<LinkFormat>,
     },
-    /// Sync draft status with the maildirs (forward-only)
-    ///
-    /// Marks a draft `pending` when its message-id is in the account's drafts
-    /// maildir, and `sent` when it is in the sent maildir. Never downgrades:
-    /// `pending` is not regressed to `draft`, and `sent` is terminal. A message
-    /// found in both drafts and sent is marked `sent` with a warning about the
-    /// stale drafts copy.
-    Reconcile,
-    /// Pick a draft or snapshot (interactive).
-    Pick {
-        #[command(subcommand)]
-        domain: PickDomain,
-    },
-    /// List drafts or snapshots to stdout.
-    List {
-        #[command(subcommand)]
-        domain: ListDomain,
-    },
     /// Print a message as markdown to stdout (no attachment extraction).
     View {
         /// Message-ID, a raw message file path, or `-` for stdin
@@ -165,22 +155,37 @@ pub enum Command {
         #[arg(long)]
         body_only: bool,
     },
+    /// List drafts or snapshots to stdout.
+    List {
+        #[command(subcommand)]
+        domain: ListDomain,
+    },
+    /// Pick a draft or snapshot (interactive).
+    Pick {
+        #[command(subcommand)]
+        domain: PickDomain,
+    },
     /// Print the effective (merged, resolved) config as TOML.
     Config,
-    /// Utility helpers.
-    Utils {
-        #[command(subcommand)]
-        command: UtilCommand,
+    /// Print a shipped JSON Schema to stdout.
+    Schema {
+        #[arg(value_enum)]
+        schema: SchemaType,
     },
-}
-
-#[derive(Subcommand)]
-pub enum UtilCommand {
-    /// Print the snapshot-naming digest of a Message-ID
+    /// Print the snapshot-naming digest of a Message-ID.
     Hash {
         /// Message-ID (surrounding angle brackets optional)
         id: String,
     },
+}
+
+/// A shipped JSON Schema.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum SchemaType {
+    /// mail-draft (the draft frontmatter contract)
+    MailDraft,
+    /// mail-snapshot (the decompiled snapshot contract)
+    MailSnapshot,
 }
 
 #[derive(Subcommand)]

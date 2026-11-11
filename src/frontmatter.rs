@@ -2,6 +2,17 @@ use regex::Regex;
 use serde::Deserialize;
 
 static MAIL_DRAFT_SCHEMA: &str = include_str!("../schema/mail-draft.schema.json");
+static MAIL_SNAPSHOT_SCHEMA: &str = include_str!("../schema/mail-snapshot.schema.json");
+
+/// The `mail-draft` JSON Schema (the draft frontmatter contract).
+pub fn mail_draft_schema() -> &'static str {
+    MAIL_DRAFT_SCHEMA
+}
+
+/// The `mail-snapshot` JSON Schema (the decompiled snapshot contract).
+pub fn mail_snapshot_schema() -> &'static str {
+    MAIL_SNAPSHOT_SCHEMA
+}
 
 /// A YAML field that may be a single string or a list of strings.
 #[derive(Debug, Clone, Default)]

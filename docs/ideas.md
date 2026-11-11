@@ -4,12 +4,6 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
 
 ## Enhancements
 
-- **Export the JSON Schema** — a CLI command (e.g. `mdmc schema mail-draft`) that
-  prints a shipped schema to stdout, so external tools (`kb-validate`,
-  note-typing) can consume it without reading the source tree.
-- **Print the effective config** — a command (e.g. `mdmc config`) that prints the
-  merged, resolved config (after local/global merge, `~` expansion, and path
-  resolution), to debug path/editor/account resolution.
 - **Batch decompile** — decompile every message in a maildir (or a set of
   Message-IDs), rather than one at a time. Could be driven by a notmuch query.
 - **Tracking-pixel filter** — drop 1×1 images and known tracker domains when
