@@ -4,7 +4,7 @@
 .SH NAME
 mdmc\-pick\-drafts \- Pick a draft and print its path
 .SH SYNOPSIS
-\fBmdmc pick drafts\fR [\fB\-\-config\fR] [\fB\-\-multi\fR] [\fB\-\-page\-size\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBmdmc pick drafts\fR [\fB\-\-config\fR] [\fB\-\-multi\fR] [\fB\-\-page\-size\fR] [\fB\-\-field\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Pick a draft and print its path
 .SH OPTIONS
@@ -17,6 +17,9 @@ Allow selecting multiple drafts
 .TP
 \fB\-\-page\-size\fR \fI<PAGE_SIZE>\fR
 Number of picker rows to show (default: [lookup] page_size)
+.TP
+\fB\-\-field\fR \fI<FIELD>\fR
+Print this frontmatter field instead of the file path
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

@@ -112,12 +112,26 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             ListDomain::Snapshots { json } => list::list_snapshots(json, cfg),
         },
         Command::Pick { domain } => match domain {
-            PickDomain::Drafts { multi, page_size } => {
-                list::pick_drafts(multi, page_size.unwrap_or_else(|| cfg.page_size()), cfg)
-            }
-            PickDomain::Snapshots { multi, page_size } => {
-                list::pick_snapshots(multi, page_size.unwrap_or_else(|| cfg.page_size()), cfg)
-            }
+            PickDomain::Drafts {
+                multi,
+                page_size,
+                field,
+            } => list::pick_drafts(
+                multi,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                field.as_deref(),
+                cfg,
+            ),
+            PickDomain::Snapshots {
+                multi,
+                page_size,
+                field,
+            } => list::pick_snapshots(
+                multi,
+                page_size.unwrap_or_else(|| cfg.page_size()),
+                field.as_deref(),
+                cfg,
+            ),
         },
         Command::Schema { schema } => {
             let s = match schema {

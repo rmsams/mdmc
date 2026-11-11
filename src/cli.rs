@@ -214,6 +214,9 @@ pub enum PickDomain {
         /// Number of picker rows to show (default: [lookup] page_size)
         #[arg(long = "page-size")]
         page_size: Option<usize>,
+        /// Print this frontmatter field instead of the file path
+        #[arg(long)]
+        field: Option<String>,
     },
     /// Pick a snapshot and print its path
     Snapshots {
@@ -223,6 +226,9 @@ pub enum PickDomain {
         /// Number of picker rows to show (default: [lookup] page_size)
         #[arg(long = "page-size")]
         page_size: Option<usize>,
+        /// Print this frontmatter field instead of the file path
+        #[arg(long)]
+        field: Option<String>,
     },
 }
 

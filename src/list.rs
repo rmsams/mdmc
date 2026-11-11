@@ -13,6 +13,7 @@ struct Entry {
     date: Option<String>,
     from: Option<String>,
     message_id: Option<String>,
+    json: Option<serde_json::Value>,
 }
 
 /// Maximum widths for the sender and title columns of the snapshot picker.
@@ -92,6 +93,7 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
                 date,
                 from,
                 message_id,
+                json,
             });
         } else {
             let status = fm
@@ -105,6 +107,7 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
                 date: None,
                 from: None,
                 message_id: None,
+                json,
             });
         }
     }
@@ -142,20 +145,79 @@ pub fn pick_draft_path(page_size: usize, cfg: &Config) -> Result<PathBuf, String
     Ok(entry.path)
 }
 
-/// `pick drafts`: pick a draft and print its path.
-pub fn pick_drafts(multi: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
+/// Whether `field` is a known property of the embedded schema.
+fn validate_field(schema: &str, field: &str) -> Result<(), String> {
+    let schema: serde_json::Value =
+        serde_json::from_str(schema).map_err(|e| format!("invalid embedded schema: {e}"))?;
+    let known = schema
+        .get("properties")
+        .and_then(|p| p.as_object())
+        .map(|props| props.contains_key(field))
+        .unwrap_or(false);
+    if known {
+        Ok(())
+    } else {
+        Err(format!("unknown frontmatter field '{field}'"))
+    }
+}
+
+/// Render a frontmatter field value for stdout: a scalar as-is, a non-scalar
+/// (array or object) as JSON.
+fn render_field_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// The value of `field` in an entry's frontmatter, or the empty string when the
+/// field is absent.
+fn field_value(entry: &Entry, field: &str) -> String {
+    entry
+        .json
+        .as_ref()
+        .and_then(|j| j.get(field))
+        .map(render_field_value)
+        .unwrap_or_default()
+}
+
+/// `pick drafts`: pick a draft and print its path (or a frontmatter field).
+pub fn pick_drafts(
+    multi: bool,
+    page_size: usize,
+    field: Option<&str>,
+    cfg: &Config,
+) -> Result<(), String> {
+    if let Some(field) = field {
+        validate_field(frontmatter::mail_draft_schema(), field)?;
+    }
     let dir = cfg.paths_source()?;
     let entries = collect_entries(&dir, false);
     let chosen = select("draft", entries, multi, page_size)?;
-    print_values(chosen.into_iter().map(|e| e.path.display().to_string()))
+    match field {
+        Some(field) => print_values(chosen.iter().map(|e| field_value(e, field))),
+        None => print_values(chosen.into_iter().map(|e| e.path.display().to_string())),
+    }
 }
 
-/// `pick snapshots`: pick a snapshot and print its path.
-pub fn pick_snapshots(multi: bool, page_size: usize, cfg: &Config) -> Result<(), String> {
+/// `pick snapshots`: pick a snapshot and print its path (or a frontmatter field).
+pub fn pick_snapshots(
+    multi: bool,
+    page_size: usize,
+    field: Option<&str>,
+    cfg: &Config,
+) -> Result<(), String> {
+    if let Some(field) = field {
+        validate_field(frontmatter::mail_snapshot_schema(), field)?;
+    }
     let dir = cfg.paths_snapshots()?;
     let entries = collect_entries(&dir, true);
     let chosen = select("snapshot", entries, multi, page_size)?;
-    print_values(chosen.into_iter().map(|e| e.path.display().to_string()))
+    match field {
+        Some(field) => print_values(chosen.iter().map(|e| field_value(e, field))),
+        None => print_values(chosen.into_iter().map(|e| e.path.display().to_string())),
+    }
 }
 
 /// `list drafts`: print draft paths, or a JSON array with `--json`.
@@ -271,10 +333,46 @@ mod tests {
             date: Some("2026-11-11T12:00:00+00:00".to_string()),
             from: Some("Ann <ann@example.com>".to_string()),
             message_id: Some("m1@x".to_string()),
+            json: None,
         };
         let label = e.label();
         assert!(label.starts_with("2026-11-11T12:00:00+00:00 | "));
         assert!(label.contains("Ann <ann@example.com>"));
         assert!(label.ends_with('…'));
+    }
+
+    #[test]
+    fn validate_field_rejects_unknown() {
+        assert!(validate_field(frontmatter::mail_draft_schema(), "message-id").is_ok());
+        assert!(validate_field(frontmatter::mail_snapshot_schema(), "from").is_ok());
+        assert!(validate_field(frontmatter::mail_draft_schema(), "nope").is_err());
+        assert!(validate_field(frontmatter::mail_draft_schema(), "from").is_err());
+    }
+
+    #[test]
+    fn render_field_value_formats_types() {
+        assert_eq!(render_field_value(&serde_json::json!("abc")), "abc");
+        assert_eq!(
+            render_field_value(&serde_json::json!(["a", "b"])),
+            r#"["a","b"]"#
+        );
+        assert_eq!(render_field_value(&serde_json::json!(true)), "true");
+        assert_eq!(render_field_value(&serde_json::Value::Null), "");
+    }
+
+    #[test]
+    fn field_value_returns_empty_when_missing() {
+        let e = Entry {
+            path: PathBuf::from("x.md"),
+            name: "x".to_string(),
+            status: None,
+            date: None,
+            from: None,
+            message_id: None,
+            json: Some(serde_json::json!({"message-id": "m1@x", "to": ["a@b.c"]})),
+        };
+        assert_eq!(field_value(&e, "message-id"), "m1@x");
+        assert_eq!(field_value(&e, "to"), r#"["a@b.c"]"#);
+        assert_eq!(field_value(&e, "subject"), "");
     }
 }
