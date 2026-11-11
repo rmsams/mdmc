@@ -147,7 +147,12 @@ fn compile_message(
     for raw in &fm.attachments {
         match mml::resolve_reference(raw, note_dir, source_assets) {
             Some(p) if p.exists() => attachment_paths.push(p),
-            Some(_) => {}
+            Some(p) => {
+                return Err(format!(
+                    "attachment '{raw}' resolves to {} which does not exist",
+                    p.display()
+                ));
+            }
             None => {
                 return Err(format!(
                     "attachment '{raw}' is a bare filename but [paths] source-assets is not set"
@@ -169,14 +174,9 @@ fn compile_message(
     headers.push(format!("Subject: {subject}"));
     headers.push(format!("Message-ID: <{message_id}>"));
 
-    let (mml_body, inline_cids) = mml::build_mml_body(
-        fm,
-        body_text,
-        cfg,
-        &attachment_paths,
-        source_assets,
-        note_dir,
-    )?;
+    let (mml_body, inline, embed_attach) =
+        mml::build_mml_body(fm, body_text, cfg, source_assets, note_dir)?;
+    attachment_paths.extend(embed_attach);
     let mml_source = format!("{}\n\n{mml_body}\n", headers.join("\n"));
 
     let sign_key = if fm.sign.unwrap_or(false) {
@@ -194,7 +194,14 @@ fn compile_message(
     } else {
         None
     };
-    let compiled = mml::compile_mml(&mml_source, &inline_cids, sign_key, encrypt, forward_attach)?;
+    let compiled = mml::compile_mml(
+        &mml_source,
+        &inline,
+        &attachment_paths,
+        sign_key,
+        encrypt,
+        forward_attach,
+    )?;
 
     let mut message = String::from_utf8_lossy(&compiled).into_owned();
     message = message.replace("\r\n", "\n");

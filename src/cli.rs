@@ -64,7 +64,8 @@ pub enum Command {
         /// Pandoc template name or path
         #[arg(long)]
         template: Option<String>,
-        /// Pandoc lua-filter name or path
+        /// Pandoc lua-filter name or path. Runs after inline-image resolution:
+        /// image src is a cid: reference, not a filename.
         #[arg(long = "lua-filter")]
         lua_filter: Option<String>,
         /// Use vanilla pandoc (no template/filter/css)

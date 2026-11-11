@@ -204,14 +204,22 @@ is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
 4. Reuse the draft's `message-id` (or generate one for legacy drafts).
 5. Optionally append a reply quote (resolved by the same lookup `decompile`
    uses, then parsed with `mail-parser`).
-6. Build the MML body: markdown → pandoc (lua filters, template, CSS) → html/plain,
-   with `![[…]]` image embeds becoming inline `cid:` parts.
-7. Compile the MML source (headers + body) to MIME via the `mime-meta-language`
-   crate (`compiler` feature only, no `cli`).
-8. Post-compile: inject `In-Reply-To`/`References` and inline `Content-ID`s,
-   restore CRLF. `In-Reply-To` is the draft's `in-reply-to` field; `References`
-   is the draft's full `references` chain, falling back to the single
-   `in-reply-to` id when no chain is present.
+6. Resolve the body through the pandoc AST: parse markdown → JSON (a bare pass,
+   no filters), walk the AST to find `![]()` and `![[…]]` embeds, resolve each
+   to a file (hard error on a bare filename with no `source-assets`, or a file
+   that does not exist), classify image-vs-non-image by extension, and rewrite
+   the AST in place — image embeds become `cid:` srcs, non-image embeds are
+   removed (they become attachments). Render the AST → html/plain/markdown;
+   the lua filter/template/CSS trio applies to html only.
+7. Build the `multipart/alternative` text body (plain + html) via the
+   `mime-meta-language` crate (`compiler` feature only), then assemble the rest
+   in Rust with `mail-builder`: wrap in `multipart/related` with the inline
+   images (explicit `Content-ID` per part), then in `multipart/mixed` with the
+   discrete attachments (content type sniffed from the file bytes).
+8. Post-compile: inject `In-Reply-To`/`References` and restore CRLF.
+   `In-Reply-To` is the draft's `in-reply-to` field; `References` is the
+   draft's full `references` chain, falling back to the single `in-reply-to` id
+   when no chain is present.
 9. Deliver: `--stdout` → stdout, `--folder NAME` → `[folders]` maildir, otherwise
    the account's `drafts` maildir (then write `status: pending` back to the draft).
 
@@ -306,6 +314,12 @@ asset.
 `pandoc-raw: true` (frontmatter, optional boolean) suppresses the trio entirely —
 vanilla pandoc with no template/filter/css.
 
+Inline-image resolution runs before the filters: `compile` resolves embeds to
+`cid:` references in a separate AST pass, so a Lua filter sees image elements
+whose `src` is `cid:img-N`, not the original filename. The trio (including any
+user `lua-filter`) applies to html output only; plain and text render with no
+filter, template, or CSS.
+
 Implementation: embedded assets are materialized to temp files before invoking
 pandoc (its `--template`/`--lua-filter`/`--include-in-header` flags take file
 paths). Once shipped, the `~/.local/share/pandoc/email.*` files and the
@@ -350,12 +364,16 @@ construction, so it does not validate; the schema is for external validation
 Dependency `mime-meta-language` links as lib name `mml`. API:
 
 ```rust
-mml::compiler::message::MmlCompilerBuilder::new().build(&source)?.compile()?.into_vec()?
+mml::compiler::message::MmlCompilerBuilder::new().build(&source)?.compile()?.into_msg_builder()
 ```
 
-`compile` is synchronous and takes the full message (headers + blank line + MML
-body). The compiler adds `MIME-Version: 1.0` and a `Date` header, and re-adds
-angle brackets to `Message-ID`/`In-Reply-To`/`References`.
+`compile` is synchronous. mdmc uses it only for the headers and the
+`multipart/alternative` text body (plain + html); the `multipart/related`
+(inline images) and `multipart/mixed` (attachments) wrappers and their file
+parts are assembled directly with `mail-builder` after `into_msg_builder()`,
+because the mml grammar has no `Content-ID` property (so an inline part cannot
+carry one through MML). The compiler adds `MIME-Version: 1.0` and a `Date`
+header, and re-adds angle brackets to `Message-ID`/`In-Reply-To`/`References`.
 
 ## Crypto (OpenPGP)
 
@@ -406,10 +424,12 @@ The `mime-meta-language` compiler has no PGP support (no `sign`/`encrypt`
 grammar, no pgp features), and `mail-builder` has no crypto helpers. The seam is
 `MmlCompileResult::into_msg_builder()`, which yields the `mail_builder`
 `MessageBuilder` before serialization; `MessageBuilder.body` is a public field.
-`compile_mml` keeps the builder in scope for the whole pipeline: inject inline
-`Content-ID`s (builder level), optionally sign (serialize the body part via
-`write_part` → `gpg --detach-sign --armor --digest-algo sha512` → wrap in
-`multipart/signed`), then optionally encrypt (serialize again → `gpg --encrypt
+`compile_mml` keeps the builder in scope for the whole pipeline: it assembles
+the `multipart/related` (inline images, `Content-ID` set per part) and
+`multipart/mixed` (attachments) wrappers directly with `mail-builder`, then
+optionally signs (serialize the body part via `write_part` → `gpg
+--detach-sign --armor --digest-algo sha512` → wrap in `multipart/signed`), then
+optionally encrypts (serialize again → `gpg --encrypt
 --armor -r <recipient> --encrypt-to <self>` → wrap in `multipart/encrypted` with
 `application/pgp-encrypted` + `application/octet-stream` parts) → serialize.
 `mail-builder` emits CRLF consistently, so the signed bytes verify.
@@ -426,6 +446,8 @@ Added optional `sign` and `encrypt` booleans to `mail-draft.schema.json`.
 
 ## Open questions (from `~/kb/ops/notes/mail-generalization-rust-rewrite.md`)
 
-- Keep the MML intermediate (current choice) or assemble MIME with `mail-builder`/`melib` directly.
+- Assemble the headers and `multipart/alternative` directly with `mail-builder`
+  too, dropping the mml crate entirely (currently mml handles headers + text
+  alternative, mail-builder handles the file parts).
 - Consolidate account config across `mail.py` and `msmtp-sent.py` (mdmc now has its own `[accounts]`, which temporarily duplicates neomutt).
 - License choice before open-sourcing.

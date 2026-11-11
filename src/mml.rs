@@ -1,13 +1,12 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
 
-use regex::Regex;
+use serde_json::Value;
 use uuid::Uuid;
 
 use mail_builder::{
-    headers::{content_type::ContentType, message_id::MessageId, HeaderType},
+    headers::{content_type::ContentType, message_id::MessageId},
     mime::{BodyPart, MimePart},
     MessageBuilder,
 };
@@ -57,16 +56,6 @@ fn resolve_template(t: &str, pandoc_data: &Path) -> String {
     }
 }
 
-fn embed_obsidian() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]").expect("static regex"))
-}
-
-fn embed_markdown() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"!\[[^\]]*\]\(([^)\s]+)\)").expect("static regex"))
-}
-
 /// Escape any literal MML directive so the compiler does not mis-parse it.
 /// `<#!` is mml's escape prefix, so an already-escaped `<#!` is left intact.
 pub fn escape_mml(text: &str) -> String {
@@ -109,14 +98,6 @@ pub fn resolve_reference(raw: &str, note_dir: &Path, base: Option<&Path>) -> Opt
     base.map(|b| b.join(t))
 }
 
-fn resolve_embed(target: &str, note_dir: &Path, base: Option<&Path>) -> Option<PathBuf> {
-    let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") || t.starts_with("data:") {
-        return None;
-    }
-    resolve_reference(t, note_dir, base)
-}
-
 /// Whether a reference is a bare filename — no `~`, scheme, or path separator —
 /// i.e. the only form that needs a `source-assets` base to resolve.
 fn is_bare(t: &str) -> bool {
@@ -137,32 +118,56 @@ fn is_image(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn attachment_part(path: &Path) -> String {
-    format!(
-        "<#part filename={} disposition=attachment>\n<#/part>",
-        path.display()
-    )
+/// Run pandoc, piping `input` to stdin and returning stdout. `args` is the
+/// command-line argument list (after the `pandoc` program name).
+fn run_pandoc(input: &str, args: &[String]) -> Result<String, String> {
+    let mut child = Command::new("pandoc")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("pandoc failed to start: {e}"))?;
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .map_err(|e| format!("pandoc stdin write failed: {e}"))?;
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("pandoc failed: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "pandoc failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn inline_part(path: &Path) -> String {
-    format!(
-        "<#part filename={} disposition=inline>\n<#/part>",
-        path.display()
-    )
+/// Parse markdown to the pandoc JSON AST (bare — no filters, template, or CSS).
+fn pandoc_parse(markdown: &str) -> Result<Value, String> {
+    let args = vec!["-f".into(), "markdown".into(), "-t".into(), "json".into()];
+    let out = run_pandoc(markdown, &args)?;
+    serde_json::from_str(&out).map_err(|e| format!("cannot parse pandoc JSON: {e}"))
 }
 
-/// Run pandoc `markdown → fmt`, applying lua filters, template, and (html only)
-/// the CSS theme. When the draft and config specify none, the embedded
-/// `email.*` defaults apply; `pandoc-raw` disables all three.
-pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<String, String> {
+/// Build the pandoc arguments for the render pass (`json → fmt`). The lua
+/// filter, template, and CSS trio applies to html output only; `pandoc-raw`
+/// disables it. Plain and markdown output render with no filter, template, or
+/// CSS.
+fn render_args(
+    cfg: &Config,
+    draft: &Draft,
+    fmt: &str,
+) -> Result<(Vec<String>, Vec<PathBuf>), String> {
     let pandoc_data = cfg.paths_pandoc_data();
     let raw = draft.pandoc_raw.unwrap_or(false);
-    let mut args: Vec<String> = vec!["-f".into(), "markdown".into(), "-t".into(), fmt.into()];
+    let mut args: Vec<String> = vec!["-f".into(), "json".into(), "-t".into(), fmt.into()];
     let mut tmp_files: Vec<PathBuf> = Vec::new();
 
-    if !raw {
-        // Lua filters: draft `lua-filter` (single) overrides the config
-        // `lua-filters` (list); when neither is set, the embedded filter runs.
+    if fmt == "html" && !raw {
         let fm_filter = draft
             .lua_filter
             .as_deref()
@@ -187,8 +192,6 @@ pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<
             args.push(p.to_string_lossy().into_owned());
         }
 
-        // Template: draft overrides config; when neither is set, the embedded
-        // template runs.
         let template = draft
             .template
             .as_deref()
@@ -212,8 +215,6 @@ pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<
             }
         }
 
-        // CSS (html only): draft overrides config; when neither is set, the
-        // embedded theme is inlined.
         if fmt == "html" {
             let css = draft
                 .css
@@ -240,137 +241,228 @@ pub fn pandoc(markdown: &str, fmt: &str, cfg: &Config, draft: &Draft) -> Result<
         }
     }
 
-    let mut child = Command::new("pandoc")
-        .args(&args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("pandoc failed to start: {e}"))?;
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(markdown.as_bytes())
-        .map_err(|e| format!("pandoc stdin write failed: {e}"))?;
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("pandoc failed: {e}"))?;
+    Ok((args, tmp_files))
+}
 
+/// Render a pandoc JSON AST to `fmt` (html, plain, or markdown), applying the
+/// lua filters, template, and CSS as configured.
+fn pandoc_render(json: &Value, fmt: &str, cfg: &Config, draft: &Draft) -> Result<String, String> {
+    let (args, tmp_files) = render_args(cfg, draft, fmt)?;
+    let out = run_pandoc(&serde_json::to_string(json).expect("valid json"), &args);
     for tmp in tmp_files {
         let _ = std::fs::remove_file(tmp);
     }
-
-    if !out.status.success() {
-        return Err(format!(
-            "pandoc failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    out
 }
 
-/// Build the MML body for a draft. Returns `(mml_body, inline_cids)`.
-///
-/// Image embeds become inline `cid:` parts in html format and attachments
-/// otherwise; non-image embeds degrade to attachments.
+/// The target of an Obsidian `![[…]]` embed, i.e. the text of a `Str` node that
+/// is exactly `![[target]]` (optionally with a `|alias` suffix).
+fn obsidian_target(text: &str) -> Option<String> {
+    let t = text.trim();
+    let rest = t.strip_prefix("![[")?;
+    let inner = rest.strip_suffix("]]")?;
+    let target = inner.split('|').next()?.trim();
+    if target.is_empty() {
+        None
+    } else {
+        Some(target.to_string())
+    }
+}
+
+/// The resolution of a single embed target.
+#[derive(Debug)]
+enum Embed {
+    /// An inline image (html format): the resolved path. The caller assigns a
+    /// `cid:`.
+    Inline(PathBuf),
+    /// A discrete attachment: the resolved path.
+    Attach(PathBuf),
+    /// A URL or data URI — leave the node untouched.
+    Skip,
+}
+
+/// Resolve one embed target, classifying it as inline, attachment, or skip.
+fn classify_embed(
+    target: &str,
+    note_dir: &Path,
+    source_assets: Option<&Path>,
+    html: bool,
+) -> Result<Embed, String> {
+    let t = target.trim();
+    if t.starts_with("http://") || t.starts_with("https://") || t.starts_with("data:") {
+        return Ok(Embed::Skip);
+    }
+    if is_bare(t) && source_assets.is_none() {
+        return Err(format!(
+            "embed '{t}' is a bare filename but [paths] source-assets is not set"
+        ));
+    }
+    let Some(path) = resolve_reference(t, note_dir, source_assets) else {
+        return Ok(Embed::Skip);
+    };
+    if !path.is_file() {
+        return Err(format!(
+            "embed '{t}' resolves to {} which does not exist",
+            path.display()
+        ));
+    }
+    if is_image(&path) && html {
+        Ok(Embed::Inline(path))
+    } else {
+        Ok(Embed::Attach(path))
+    }
+}
+
+/// Inline image parts: `(cid, path)` pairs.
+type InlineParts = Vec<(String, PathBuf)>;
+
+/// Walk the pandoc JSON AST, resolving every embed (`Image` nodes and
+/// `![[…]]` `Str` nodes) in place. Image embeds (html) become `cid:` srcs;
+/// all other embeds are removed (they become attachments). Returns the inline
+/// `(cid, path)` pairs and the attachment paths discovered from non-image
+/// embeds.
+fn resolve_embeds(
+    json: &mut Value,
+    note_dir: &Path,
+    source_assets: Option<&Path>,
+    html: bool,
+) -> Result<(InlineParts, Vec<PathBuf>), String> {
+    let mut inline = Vec::new();
+    let mut attach = Vec::new();
+    let mut cid_n = 0u32;
+    walk(
+        json,
+        note_dir,
+        source_assets,
+        html,
+        &mut inline,
+        &mut attach,
+        &mut cid_n,
+    )?;
+    Ok((inline, attach))
+}
+
+fn walk(
+    v: &mut Value,
+    note_dir: &Path,
+    source_assets: Option<&Path>,
+    html: bool,
+    inline: &mut InlineParts,
+    attach: &mut Vec<PathBuf>,
+    cid_n: &mut u32,
+) -> Result<(), String> {
+    match v {
+        Value::Array(items) => {
+            for item in items.iter_mut() {
+                walk(item, note_dir, source_assets, html, inline, attach, cid_n)?;
+            }
+        }
+        Value::Object(map) => {
+            let tag = map.get("t").and_then(Value::as_str).map(str::to_string);
+            match tag.as_deref() {
+                Some("Image") => {
+                    if let Some(src) = map
+                        .get("c")
+                        .and_then(|c| c.get(2))
+                        .and_then(|t| t.get(0))
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                    {
+                        match classify_embed(&src, note_dir, source_assets, html)? {
+                            Embed::Inline(path) => {
+                                *cid_n += 1;
+                                let cid = format!("img-{cid_n}");
+                                inline.push((cid.clone(), path));
+                                let c = serde_json::json!([
+                                    ["", [], []],
+                                    [],
+                                    [format!("cid:{cid}"), ""]
+                                ]);
+                                map.insert("c".to_string(), c);
+                            }
+                            Embed::Attach(path) => {
+                                attach.push(path);
+                                map.insert("t".to_string(), Value::String("Str".to_string()));
+                                map.insert("c".to_string(), Value::String(String::new()));
+                            }
+                            Embed::Skip => {}
+                        }
+                    }
+                    return Ok(());
+                }
+                Some("Str") => {
+                    let text = map.get("c").and_then(Value::as_str).map(str::to_string);
+                    if let Some(target) = text.as_deref().and_then(obsidian_target) {
+                        match classify_embed(&target, note_dir, source_assets, html)? {
+                            Embed::Inline(path) => {
+                                *cid_n += 1;
+                                let cid = format!("img-{cid_n}");
+                                inline.push((cid.clone(), path));
+                                map.insert("t".to_string(), Value::String("Image".to_string()));
+                                let c = serde_json::json!([
+                                    ["", [], []],
+                                    [],
+                                    [format!("cid:{cid}"), ""]
+                                ]);
+                                map.insert("c".to_string(), c);
+                            }
+                            Embed::Attach(path) => {
+                                attach.push(path);
+                                map.insert("c".to_string(), Value::String(String::new()));
+                            }
+                            Embed::Skip => {}
+                        }
+                        return Ok(());
+                    }
+                }
+                _ => {}
+            }
+            for val in map.values_mut() {
+                walk(val, note_dir, source_assets, html, inline, attach, cid_n)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Build the MML text body for a draft, resolving embeds through the pandoc
+/// JSON AST. Returns `(mml_body, inline, embed_attachments)` where `mml_body`
+/// is the alternative (html) or plain text (plain/text), `inline` is the
+/// `(cid, path)` pairs for inline images, and `embed_attachments` is the paths
+/// discovered from non-image embeds.
 pub fn build_mml_body(
     draft: &Draft,
     body: &str,
     cfg: &Config,
-    attachments: &[PathBuf],
     source_assets: Option<&Path>,
     note_dir: &Path,
-) -> Result<(String, Vec<String>), String> {
+) -> Result<(String, InlineParts, Vec<PathBuf>), String> {
     let fmt = draft.format();
     let body = body.trim_end_matches('\n');
+    let html = fmt == "html";
 
-    let mut matches: Vec<(usize, usize, String)> = Vec::new();
-    for m in embed_obsidian().captures_iter(body) {
-        let full = m.get(0).unwrap();
-        let target = m.get(1).unwrap().as_str().trim().to_string();
-        matches.push((full.start(), full.end(), target));
-    }
-    for m in embed_markdown().captures_iter(body) {
-        let full = m.get(0).unwrap();
-        let target = m.get(1).unwrap().as_str().trim().to_string();
-        matches.push((full.start(), full.end(), target));
-    }
-    matches.sort_by_key(|(start, _, _)| *start);
-
-    let mut inline: Vec<(String, PathBuf)> = Vec::new();
-    let mut attach: Vec<PathBuf> = attachments.to_vec();
-
-    let mut pieces: Vec<String> = Vec::new();
-    let mut last = 0;
-    let mut cid_n = 0;
-    for (start, end, target) in &matches {
-        pieces.push(body[last..*start].to_string());
-        last = *end;
-        if is_bare(target) && source_assets.is_none() {
-            return Err(format!(
-                "embed '{target}' is a bare filename but [paths] source-assets is not set"
-            ));
-        }
-        match resolve_embed(target, note_dir, source_assets) {
-            Some(path) if path.is_file() && is_image(&path) => {
-                if fmt == "html" {
-                    cid_n += 1;
-                    let cid = format!("img-{cid_n}");
-                    inline.push((cid.clone(), path));
-                    pieces.push(format!("![](cid:{cid})"));
-                } else {
-                    attach.push(path);
-                    pieces.push(String::new());
-                }
-            }
-            Some(path) if path.is_file() => {
-                attach.push(path);
-                pieces.push(String::new());
-            }
-            _ => pieces.push(body[*start..*end].to_string()),
-        }
-    }
-    pieces.push(body[last..].to_string());
-    let transformed = pieces.concat();
+    let mut json = pandoc_parse(body)?;
+    let (inline, embed_attach) = resolve_embeds(&mut json, note_dir, source_assets, html)?;
 
     let inner = if fmt == "html" {
-        let html = pandoc(&transformed, "html", cfg, draft)?;
+        let rendered = pandoc_render(&json, "html", cfg, draft)?;
         let plain = escape_mml(body);
         format!(
-            "<#multipart type=alternative>\n{plain}\n<#part type=text/html>\n{html}\n<#/part>\n<#/multipart>"
+            "<#multipart type=alternative>\n{plain}\n<#part type=text/html>\n{rendered}\n<#/part>\n<#/multipart>"
         )
     } else if fmt == "plain" {
-        escape_mml(&pandoc(&transformed, "plain", cfg, draft)?)
+        escape_mml(&pandoc_render(&json, "plain", cfg, draft)?)
     } else {
-        if transformed.is_empty() {
+        let rendered = pandoc_render(&json, "markdown", cfg, draft)?;
+        if rendered.trim().is_empty() {
             "\n".to_string()
         } else {
-            escape_mml(&transformed)
+            escape_mml(&rendered)
         }
     };
 
-    let inner = if !inline.is_empty() {
-        let parts: Vec<String> = inline.iter().map(|(_, p)| inline_part(p)).collect();
-        format!(
-            "<#multipart type=related>\n{inner}\n{}\n<#/multipart>",
-            parts.join("\n")
-        )
-    } else {
-        inner
-    };
-
-    let inner = if !attach.is_empty() {
-        let parts: Vec<String> = attach.iter().map(|p| attachment_part(p)).collect();
-        format!(
-            "<#multipart type=mixed>\n{inner}\n{}\n<#/multipart>",
-            parts.join("\n")
-        )
-    } else {
-        inner
-    };
-
-    Ok((inner, inline.into_iter().map(|(cid, _)| cid).collect()))
+    Ok((inner, inline, embed_attach))
 }
 
 /// Encryption parameters: the recipient email addresses and an optional
@@ -380,13 +472,37 @@ pub struct EncryptSpec<'a> {
     pub encrypt_to: Option<&'a str>,
 }
 
-/// Compile a full MML message (headers + blank line + MML body) to MIME bytes,
-/// injecting inline `Content-ID`s and optionally signing and/or encrypting the
-/// body. The builder is kept in scope for the whole pipeline because the
-/// compiled `MessageBuilder` borrows the MML source.
+/// Build an inline image MIME part from a file, carrying an explicit
+/// `Content-ID`. The `cid:` reference in the html body resolves against this.
+fn inline_part(cid: &str, path: &Path) -> Result<MimePart<'static>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let ctype = ContentType::new(tree_magic_mini::from_u8(&bytes));
+    let mut part = MimePart::new(ctype, bytes).inline();
+    part.headers
+        .push(("Content-ID".into(), MessageId::new(cid.to_string()).into()));
+    Ok(part)
+}
+
+/// Build a discrete attachment MIME part from a file.
+fn attachment_part(path: &Path) -> Result<MimePart<'static>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let ctype = ContentType::new(tree_magic_mini::from_u8(&bytes));
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("noname")
+        .to_string();
+    Ok(MimePart::new(ctype, bytes).attachment(name))
+}
+
+/// Compile a full MML message (headers + blank line + text body) to MIME bytes,
+/// wrapping the body in `multipart/related` with the inline images and in
+/// `multipart/mixed` with the attachments, then optionally signing and/or
+/// encrypting.
 pub fn compile_mml(
     mml_source: &str,
-    inline_cids: &[String],
+    inline: &[(String, PathBuf)],
+    attachments: &[PathBuf],
     signing_key: Option<&str>,
     encrypt: Option<EncryptSpec<'_>>,
     forward_attach: Option<(&str, &[u8])>,
@@ -399,7 +515,30 @@ pub fn compile_mml(
         .map_err(|e| format!("mml compile failed: {e}"))?;
     let mut builder = result.into_msg_builder();
 
-    inject_content_ids(&mut builder, inline_cids);
+    if !inline.is_empty() {
+        let body = builder.body.take().ok_or("no body to wrap")?;
+        let mut parts = vec![body];
+        for (cid, path) in inline {
+            parts.push(inline_part(cid, path)?);
+        }
+        builder.body = Some(MimePart::new(
+            ContentType::new("multipart/related"),
+            BodyPart::Multipart(parts),
+        ));
+    }
+
+    if !attachments.is_empty() {
+        let body = builder.body.take().ok_or("no body to wrap")?;
+        let mut parts = vec![body];
+        for path in attachments {
+            parts.push(attachment_part(path)?);
+        }
+        builder.body = Some(MimePart::new(
+            ContentType::new("multipart/mixed"),
+            BodyPart::Multipart(parts),
+        ));
+    }
+
     if let Some((message_id, raw)) = forward_attach {
         let body = builder.body.take().ok_or("no body to forward")?;
         let forward_part = MimePart::new("message/rfc822", BodyPart::Binary(raw.to_vec().into()))
@@ -420,38 +559,6 @@ pub fn compile_mml(
     builder
         .write_to_vec()
         .map_err(|e| format!("cannot serialize message: {e}"))
-}
-
-/// Assign `Content-ID`s to inline parts in source order. The mml compiler emits
-/// `Content-Disposition: inline` for inline image parts but no `Content-ID`, so
-/// the `cid:` references in the html body cannot resolve without this.
-fn inject_content_ids(builder: &mut MessageBuilder, cids: &[String]) {
-    if cids.is_empty() {
-        return;
-    }
-    if let Some(body) = builder.body.as_mut() {
-        let mut idx = 0;
-        inject_cids_rec(body, cids, &mut idx);
-    }
-}
-
-fn inject_cids_rec(part: &mut MimePart, cids: &[String], idx: &mut usize) {
-    let is_inline = part.headers.iter().any(|(name, value)| {
-        name == "Content-Disposition"
-            && matches!(value, HeaderType::ContentType(ct) if ct.c_type == "inline")
-    });
-    if is_inline && *idx < cids.len() {
-        part.headers.push((
-            "Content-ID".into(),
-            MessageId::new(cids[*idx].clone()).into(),
-        ));
-        *idx += 1;
-    }
-    if let BodyPart::Multipart(parts) = &mut part.contents {
-        for p in parts {
-            inject_cids_rec(p, cids, idx);
-        }
-    }
 }
 
 /// Sign the message body with OpenPGP, wrapping it in `multipart/signed`
@@ -627,35 +734,70 @@ mod tests {
     }
 
     #[test]
-    fn resolve_embed_returns_none_for_urls() {
-        let note = Path::new("/notes");
-        let attach = Path::new("/attachments");
+    fn obsidian_target_extracts_target_and_alias() {
+        assert_eq!(obsidian_target("![[foo.png]]"), Some("foo.png".to_string()));
         assert_eq!(
-            resolve_embed("http://example.com/x.png", note, Some(attach)),
-            None
+            obsidian_target("![[foo.png|alias]]"),
+            Some("foo.png".to_string())
         );
         assert_eq!(
-            resolve_embed("https://example.com/x.png", note, Some(attach)),
-            None
+            obsidian_target("![[sub/foo.png]]"),
+            Some("sub/foo.png".to_string())
         );
-        assert_eq!(
-            resolve_embed("data:image/png;base64,abc", note, Some(attach)),
-            None
-        );
+        assert_eq!(obsidian_target("see ![[foo.png]]"), None);
+        assert_eq!(obsidian_target("plain text"), None);
     }
 
     #[test]
-    fn resolve_embed_delegates_to_reference_resolution() {
+    fn classify_embed_skips_urls() {
         let note = Path::new("/notes");
         let attach = Path::new("/attachments");
-        assert_eq!(
-            resolve_embed("foo.png", note, Some(attach)),
-            Some(PathBuf::from("/attachments/foo.png"))
-        );
-        assert_eq!(
-            resolve_embed("sub/foo.png", note, Some(attach)),
-            Some(PathBuf::from("/notes/sub/foo.png"))
-        );
+        assert!(matches!(
+            classify_embed("http://x/y.png", note, Some(attach), true).unwrap(),
+            Embed::Skip
+        ));
+        assert!(matches!(
+            classify_embed("https://x/y.png", note, Some(attach), true).unwrap(),
+            Embed::Skip
+        ));
+        assert!(matches!(
+            classify_embed("data:image/png;base64,abc", note, Some(attach), true).unwrap(),
+            Embed::Skip
+        ));
+    }
+
+    #[test]
+    fn classify_embed_errors_on_bare_without_base() {
+        let note = Path::new("/notes");
+        let err = classify_embed("foo.png", note, None, true).unwrap_err();
+        assert!(err.contains("source-assets"));
+    }
+
+    #[test]
+    fn classify_embed_classifies_image_and_attachment() {
+        let dir = std::env::temp_dir().join(format!("mdmc-embed-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let img = dir.join("logo.png");
+        let pdf = dir.join("doc.pdf");
+        std::fs::write(&img, b"fake").unwrap();
+        std::fs::write(&pdf, b"fake").unwrap();
+
+        let Embed::Inline(p) = classify_embed("logo.png", &dir, Some(&dir), true).unwrap() else {
+            panic!("expected Inline for image in html");
+        };
+        assert_eq!(p, img);
+
+        let Embed::Attach(p) = classify_embed("logo.png", &dir, Some(&dir), false).unwrap() else {
+            panic!("expected Attach for image in plain");
+        };
+        assert_eq!(p, img);
+
+        let Embed::Attach(p) = classify_embed("doc.pdf", &dir, Some(&dir), true).unwrap() else {
+            panic!("expected Attach for non-image");
+        };
+        assert_eq!(p, pdf);
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -667,5 +809,45 @@ mod tests {
         assert!(!is_bare("/abs/foo.png"));
         assert!(!is_bare("http://x/y.png"));
         assert!(!is_bare("data:image/png;base64,abc"));
+    }
+
+    #[test]
+    fn resolve_embeds_skips_code_blocks() {
+        let mut json = serde_json::json!({
+            "blocks": [
+                {"t": "CodeBlock", "c": [["", [], []], "![[missing.png]]"]}
+            ]
+        });
+        let (inline, attach) = resolve_embeds(&mut json, Path::new("/n"), None, true).unwrap();
+        assert!(inline.is_empty());
+        assert!(attach.is_empty());
+    }
+
+    #[test]
+    fn build_mml_body_resolves_inline_image_to_cid() {
+        let dir = std::env::temp_dir().join(format!("mdmc-body-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("logo.png"), b"fake").unwrap();
+
+        let draft = Draft {
+            format: Some("html".to_string()),
+            ..Default::default()
+        };
+        let (mml, inline, attach) = build_mml_body(
+            &draft,
+            "![[logo.png]]",
+            &Config::default(),
+            Some(&dir),
+            &dir,
+        )
+        .unwrap();
+
+        assert_eq!(inline.len(), 1);
+        assert_eq!(inline[0].0, "img-1");
+        assert_eq!(inline[0].1, dir.join("logo.png"));
+        assert!(attach.is_empty());
+        assert!(mml.contains("cid:img-1"));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

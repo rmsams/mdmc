@@ -780,6 +780,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "toml",
+ "tree_magic_mini",
  "uuid",
 ]
 

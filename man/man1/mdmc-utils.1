@@ -1,0 +1,20 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH mdmc-utils 1  "utils " 
+.SH NAME
+mdmc\-utils \- Utility helpers
+.SH SYNOPSIS
+\fBmdmc utils\fR [\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Utility helpers
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fI<CONFIG>\fR
+Path to config.toml (default ~/.config/mdmc/config.toml)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+mdmc\-utils\-hash(1)
+Print the snapshot\-naming digest of a Message\-ID
