@@ -38,9 +38,11 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   the original HTML discarded, so the snapshot is lossy. Consider saving the
   raw HTML as an attachment for byte-faithful fidelity.
 - **Attachment cleanup on delete** — when a snapshot note is deleted, should its
-  `<message-id>--` files in `attachments/` be removed too?
+  `<hash>-`/`cid-<hash>-` files in `snapshot-assets/` be removed too?
 - **Deep-open link** — the snapshot has no `neomutt:`/deep-open field (kept
   MUA-agnostic); decide whether and how the integration layer re-adds one.
-- **Inline embed syntax** — inline `cid:` images are currently emitted as
-  standard markdown `![alt](<disk-name>)`; Obsidian resolves bare names, but a
-  stricter renderer would want a relative path. Confirm the preferred form.
+- **Inline embed syntax** — inline `cid:` images are emitted as standard markdown
+  `![alt](cid-<hash>-<name>)`; the note lives in `snapshots/` while assets live
+  in `snapshot-assets/`, so the bare name does not resolve relative to the note.
+  Confirm the preferred form (relative path vs bare name plus an Obsidian
+  attachment-folder setting).

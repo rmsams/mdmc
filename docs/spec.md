@@ -34,7 +34,8 @@ interactive picker over the same domains and prints the chosen value(s).
 extraction and no `cid:` rewriting: by default a full snapshot note (frontmatter
 + body), or, with `--body-only`, just a subject/meta header + body — a
 terminal-reader mode. `mdmc config` prints the effective (merged, resolved)
-config as TOML. None of them ever send.
+config as TOML. `mdmc utils hash <id>` prints the snapshot-naming digest of a
+Message-ID. None of them ever send.
 
 ## Decompile
 
@@ -47,12 +48,12 @@ path to an existing file reads that file as raw message; anything else is
 treated as a Message-ID, resolved via notmuch's `mid:` term with a maildir-scan
 fallback (see Message-id resolution).
 
-The snapshot note lives at `[paths] snapshots/<slug>.md`, where `slug` is a
-filesystem-safe form of the message's Message-ID (identity for
-`[A-Za-z0-9._@+-]`, percent-encode otherwise, strip a leading `.`, truncate ids
-over 240 characters with an 8-hex hash). `--stdout` prints the note instead of
-writing it (and suppresses attachment extraction). Extraction is idempotent — a
-Message-ID whose snapshot already exists is skipped.
+The snapshot note lives at `[paths] snapshots/<hash>.md`, where `<hash>` is a
+fixed-length digest of the Message-ID (see Snapshot naming). `--stdout` prints
+the note instead of writing it (and suppresses attachment extraction).
+Extraction is idempotent — the note path is computed directly from the
+Message-ID (`<hash> = hash(id)`), so a Message-ID whose snapshot already exists
+is skipped.
 
 The frontmatter carries the envelope: `title` (the Subject, falling back to
 `(no subject)`), `type` (`mail-snapshot`), `message-id` (the raw id, the key),
@@ -77,12 +78,43 @@ the AST, not the HTML text, so it touches only real image elements.
 ### Attachments
 
 Discrete attachments and inline `cid:` images are extracted to
-`[paths] attachments/<message-id>--<name>` (the name sanitised to a single path
-component). Inline images are embedded in the body (see Conversion) and are not
-re-listed; discrete attachments appear in the `## Attachments` section only
-under `--link-attachments`. The frontmatter `attachments` field always lists
-every extracted file as `{ file, content-type }` — the MIME `Content-Type` is
-preserved, not just the filename. A tracking-pixel filter is deferred.
+`[paths] snapshot-assets/` under a `<hash>`-prefixed name (inline assets carry
+an additional `cid-` prefix — see Snapshot naming). Inline images are embedded
+in the body (see Conversion) and are not re-listed; discrete attachments appear
+in the `## Attachments` section only under `--link-attachments`. The frontmatter
+`attachments` field always lists every extracted file as `{ file, content-type }`
+— the MIME `Content-Type` is preserved, not just the filename. A tracking-pixel
+filter is deferred.
+
+### Snapshot naming
+
+Snapshot filenames are keyed on a digest of the Message-ID, not the Message-ID
+itself: Message-IDs are not human-readable, vary widely in length and pattern,
+and need sanitising to become path-safe — which breaks any external
+`msgid → path` mapping that lacks mdmc's exact sanitisation algorithm.
+
+```
+hash(id) = hex(sha256(utf8(strip_brackets(id)))[..16])
+```
+
+i.e. the first 16 bytes of the SHA-256 of the UTF-8 encoding of the Message-ID
+with its surrounding angle brackets stripped, rendered as 32 lowercase hex
+characters. First-`N` truncation matches the universal convention (git's short
+SHA); there is no case folding and no further normalisation. `mdmc utils hash
+<id>` reproduces it, so any consumer can compute `msgid → path` without mdmc.
+
+Filename rules (snapshot domain only — drafts keep title slugs):
+
+| artifact | path |
+| --- | --- |
+| note | `snapshots/<hash>.md` |
+| discrete attachment | `snapshot-assets/<hash>-<name>` |
+| inline `cid:` asset | `snapshot-assets/cid-<hash>-<name>` |
+
+`<name>` is the decoded filename sanitised to a single path component (`/ \ :
+NUL` and control/whitespace → `_`), falling back to `<content-id>.<subtype>`
+when no filename is present. Within one message, a duplicate `<name>` after
+sanitisation disambiguates with a `-2`, `-3`, … suffix.
 
 ## Status lifecycle
 
@@ -153,8 +185,9 @@ line, or a JSON array with `--json`); `mdmc pick drafts`/`pick snapshots` open
 an interactive picker over the same entries and print the chosen path(s), one
 per line (comma-joining is not useful for paths). Drafts are read from
 `[paths] source` (labelled by their frontmatter `status`), snapshots from
-`[paths] snapshots` (labelled by `date`/`title`). The picker page size defaults
-to `[lookup] page_size` (default 7).
+`[paths] snapshots` (labelled from frontmatter `date`/`title`, never the
+filename, so hashed names do not affect the picker; `--json` also emits
+`message-id`). The picker page size defaults to `[lookup] page_size` (default 7).
 
 Message and address lookup are deliberately out of scope. Message-id picking is
 `mfzf` (a home-manager shell helper over `notmuch search`), and address picking
@@ -187,10 +220,11 @@ is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
 ```toml
 [paths]
 source = "~/kb/ops/mail/drafts"      # markdown drafts directory
-attachments = "~/kb/attachments"     # bare-filename base for embeds and attachments
+snapshots = "~/kb/ops/mail/refs"     # decompiled snapshot notes
+source-assets = "~/kb/attachments"    # bare-filename base for draft embeds + attachments (optional)
+snapshot-assets = "~/kb/attachments"  # extraction store for snapshots
 pandoc_data = "~/.local/share/pandoc"
 mail = "~/Mail"                      # maildir root for Message-ID resolution
-snapshots = "~/kb/ops/mail/refs"     # decompiled snapshot notes
 
 [accounts.rmsams-gmail]
 from = "rmsams@gmail.com"
@@ -233,16 +267,18 @@ mdmc resolves its config in this order:
 A local `.mdmc.toml` is merged over the global config: local fields take
 precedence, and the `accounts`/`folders` maps are a union with local precedence.
 Relative paths in a config file resolve against that file's directory, so a repo
-can use `source = "drafts"`. `paths.source` and `paths.attachments` are required
-(no default — the tool must not assume a drafts location). `paths.mail` is
-required only for Message-ID resolution (`decompile`), and `paths.snapshots`
-only for `decompile` without `--stdout`. `paths.pandoc_data`
-defaults to `~/.local/share/pandoc`. mdmc does not read neomutt config. Bare delivery
-paths are maildirs; a `maildir:`/`imaps:` URI scheme is deferred until a second
-backend lands.
+can use `source = "drafts"`. `paths.source` is required (no default — the tool
+must not assume a drafts location). `paths.source-assets` is optional: it is the
+bare-filename base for draft embeds and attachments, and a bare reference with
+no `source-assets` set is an error at compile time. `paths.mail` is required only for
+Message-ID resolution (`decompile`), `paths.snapshots` only for `decompile`
+without `--stdout`, and `paths.snapshot-assets` only for `decompile` extraction.
+`paths.pandoc_data` defaults to `~/.local/share/pandoc`. mdmc does not read
+neomutt config. Bare delivery paths are maildirs; a `maildir:`/`imaps:` URI
+scheme is deferred until a second backend lands.
 
 Embed and `attachments` references resolve by shape: a bare filename under
-`paths.attachments`, a path with a separator relative to the draft's directory,
+`paths.source-assets`, a path with a separator relative to the draft's directory,
 `~` against home, and an absolute path as-is.
 
 ## Pandoc defaults

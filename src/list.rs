@@ -11,15 +11,35 @@ struct Entry {
     name: String,
     status: Option<String>,
     date: Option<String>,
+    from: Option<String>,
+    message_id: Option<String>,
+}
+
+/// Maximum widths for the sender and title columns of the snapshot picker.
+const SENDER_MAX: usize = 28;
+const TITLE_MAX: usize = 48;
+
+/// Truncate `s` to at most `max` characters, appending `…` when it overflows.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut t: String = s.chars().take(max - 1).collect();
+    t.push('…');
+    t
 }
 
 impl Entry {
     fn label(&self) -> String {
-        match (&self.status, &self.date) {
-            (Some(status), _) => format!("{status:<7}  {}", self.name),
-            (None, Some(date)) => format!("{date}  {}", self.name),
-            (None, None) => self.name.clone(),
+        if let Some(status) = &self.status {
+            return format!("{status:<7}  {}", self.name);
         }
+        let Some(date) = &self.date else {
+            return self.name.clone();
+        };
+        let sender = truncate(self.from.as_deref().unwrap_or(""), SENDER_MAX);
+        let title = truncate(&self.name, TITLE_MAX);
+        format!("{date} | {sender:<SENDER_MAX$} | {title}")
     }
 }
 
@@ -42,27 +62,49 @@ fn collect_entries(dir: &Path, snapshots: bool) -> Vec<Entry> {
             continue;
         }
         let slug = path.file_stem().unwrap().to_string_lossy().into_owned();
-        let fm = std::fs::read_to_string(&path)
+        let (fm, json) = std::fs::read_to_string(&path)
             .ok()
-            .and_then(|text| frontmatter::load(&text).0);
+            .map(|text| {
+                let (draft, json, _) = frontmatter::load(&text);
+                (draft, json)
+            })
+            .unwrap_or((None, None));
         if snapshots {
-            let name = fm.as_ref().and_then(|f| f.title.clone()).unwrap_or(slug);
-            let date = fm.and_then(|f| f.date);
+            let name = fm
+                .as_ref()
+                .and_then(|f| f.title.clone())
+                .unwrap_or_else(|| slug.clone());
+            let date = fm.as_ref().and_then(|f| f.date.clone());
+            let from = json
+                .as_ref()
+                .and_then(|j| j.get("from"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let message_id = json
+                .as_ref()
+                .and_then(|j| j.get("message-id"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             entries.push(Entry {
                 path,
                 name,
                 status: None,
                 date,
+                from,
+                message_id,
             });
         } else {
             let status = fm
-                .and_then(|f| f.status)
+                .as_ref()
+                .and_then(|f| f.status.clone())
                 .unwrap_or_else(|| "(none)".to_string());
             entries.push(Entry {
                 path,
                 name: slug,
                 status: Some(status),
                 date: None,
+                from: None,
+                message_id: None,
             });
         }
     }
@@ -195,6 +237,7 @@ pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
                 serde_json::json!({
                     "title": e.name,
                     "date": e.date,
+                    "message-id": e.message_id,
                     "path": e.path.display().to_string(),
                 })
             })
@@ -202,4 +245,36 @@ pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
         return println_json(&out);
     }
     print_values(entries.iter().map(|e| e.path.display().to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_leaves_short_strings_alone() {
+        assert_eq!(truncate("hi", 10), "hi");
+        assert_eq!(truncate("0123456789", 10), "0123456789");
+    }
+
+    #[test]
+    fn truncate_ellipsizes_long_strings() {
+        assert_eq!(truncate("abcdefghij", 5), "abcd…");
+    }
+
+    #[test]
+    fn snapshot_label_pads_and_truncates_columns() {
+        let e = Entry {
+            path: PathBuf::from("x.md"),
+            name: "A very long title that should be cut down to fit the column width".to_string(),
+            status: None,
+            date: Some("2026-11-11T12:00:00+00:00".to_string()),
+            from: Some("Ann <ann@example.com>".to_string()),
+            message_id: Some("m1@x".to_string()),
+        };
+        let label = e.label();
+        assert!(label.starts_with("2026-11-11T12:00:00+00:00 | "));
+        assert!(label.contains("Ann <ann@example.com>"));
+        assert!(label.ends_with('…'));
+    }
 }

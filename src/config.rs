@@ -122,10 +122,13 @@ pub struct Editor {
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Paths {
     pub source: Option<String>,
-    pub attachments: Option<String>,
+    pub snapshots: Option<String>,
+    #[serde(rename = "source-assets")]
+    pub source_assets: Option<String>,
+    #[serde(rename = "snapshot-assets")]
+    pub snapshot_assets: Option<String>,
     pub pandoc_data: Option<String>,
     pub mail: Option<String>,
-    pub snapshots: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -185,7 +188,10 @@ impl Config {
         if let Some(p) = &mut self.paths.source {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
-        if let Some(p) = &mut self.paths.attachments {
+        if let Some(p) = &mut self.paths.source_assets {
+            *p = resolve_path(p, base).to_string_lossy().into_owned();
+        }
+        if let Some(p) = &mut self.paths.snapshot_assets {
             *p = resolve_path(p, base).to_string_lossy().into_owned();
         }
         if let Some(p) = &mut self.paths.pandoc_data {
@@ -216,10 +222,11 @@ impl Config {
         Config {
             paths: Paths {
                 source: local.paths.source.or(global.paths.source),
-                attachments: local.paths.attachments.or(global.paths.attachments),
+                snapshots: local.paths.snapshots.or(global.paths.snapshots),
+                source_assets: local.paths.source_assets.or(global.paths.source_assets),
+                snapshot_assets: local.paths.snapshot_assets.or(global.paths.snapshot_assets),
                 pandoc_data: local.paths.pandoc_data.or(global.paths.pandoc_data),
                 mail: local.paths.mail.or(global.paths.mail),
-                snapshots: local.paths.snapshots.or(global.paths.snapshots),
             },
             folders: merge_map(local.folders, global.folders),
             defaults: Defaults {
@@ -248,12 +255,18 @@ impl Config {
         Ok(expand_home(raw))
     }
 
-    pub fn paths_attachments(&self) -> Result<PathBuf, String> {
+    /// The optional bare-filename base for draft embeds and attachments.
+    pub fn paths_source_assets(&self) -> Option<PathBuf> {
+        self.paths.source_assets.as_deref().map(expand_home)
+    }
+
+    /// The extraction store for decompiled snapshots (inline + discrete).
+    pub fn paths_snapshot_assets(&self) -> Result<PathBuf, String> {
         let raw = self
             .paths
-            .attachments
+            .snapshot_assets
             .as_deref()
-            .ok_or_else(|| "[paths] attachments is required".to_string())?;
+            .ok_or_else(|| "[paths] snapshot-assets is required".to_string())?;
         Ok(expand_home(raw))
     }
 
@@ -412,13 +425,14 @@ lua-filters = ["email"]
     }
 
     #[test]
-    fn paths_source_and_attachments_error_when_unset() {
+    fn required_paths_error_when_unset() {
         let cfg = Config::default();
         assert!(cfg.paths_source().is_err());
-        assert!(cfg.paths_attachments().is_err());
+        assert!(cfg.paths_snapshot_assets().is_err());
         assert!(cfg.paths_mail().is_err());
         assert!(cfg.paths_snapshots().is_err());
         assert!(cfg.paths_pandoc_data().ends_with(".local/share/pandoc"));
+        assert!(cfg.paths_source_assets().is_none());
     }
 
     #[test]
@@ -481,14 +495,15 @@ from = "b@local"
         let path = dir.join(".mdmc.toml");
         std::fs::write(
             &path,
-            "[paths]\nsource = \"source\"\nattachments = \"attachments\"\n",
+            "[paths]\nsource = \"source\"\nsource-assets = \"attachments\"\nsnapshot-assets = \"snapshots\"\n",
         )
         .unwrap();
         let cfg = Config::load(&path);
         std::fs::remove_dir_all(&dir).ok();
 
         assert_eq!(cfg.paths_source().unwrap(), dir.join("source"));
-        assert_eq!(cfg.paths_attachments().unwrap(), dir.join("attachments"));
+        assert_eq!(cfg.paths_source_assets().unwrap(), dir.join("attachments"));
+        assert_eq!(cfg.paths_snapshot_assets().unwrap(), dir.join("snapshots"));
     }
 
     #[test]

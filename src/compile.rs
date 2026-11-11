@@ -130,7 +130,7 @@ fn compile_message(
     fm: &frontmatter::Draft,
     body_text: &str,
     message_id: &str,
-    attachments_dir: &Path,
+    source_assets: Option<&Path>,
     note_dir: &Path,
     acct: &config::Account,
     forward_attach: Option<(&str, &[u8])>,
@@ -145,9 +145,14 @@ fn compile_message(
 
     let mut attachment_paths: Vec<PathBuf> = Vec::new();
     for raw in &fm.attachments {
-        let p = mml::resolve_reference(raw, note_dir, attachments_dir);
-        if p.exists() {
-            attachment_paths.push(p);
+        match mml::resolve_reference(raw, note_dir, source_assets) {
+            Some(p) if p.exists() => attachment_paths.push(p),
+            Some(_) => {}
+            None => {
+                return Err(format!(
+                    "attachment '{raw}' is a bare filename but [paths] source-assets is not set"
+                ));
+            }
         }
     }
 
@@ -169,7 +174,7 @@ fn compile_message(
         body_text,
         cfg,
         &attachment_paths,
-        attachments_dir,
+        source_assets,
         note_dir,
     )?;
     let mml_source = format!("{}\n\n{mml_body}\n", headers.join("\n"));
@@ -217,7 +222,7 @@ pub fn compile(
     }
 
     let drafts_dir = cfg.paths_source()?;
-    let attachments_dir = cfg.paths_attachments()?;
+    let source_assets = cfg.paths_source_assets();
 
     let mut arg = config::expand_home(draft_arg);
     if !arg.is_absolute() {
@@ -313,7 +318,7 @@ pub fn compile(
         &fm,
         &body_text,
         &message_id,
-        &attachments_dir,
+        source_assets.as_deref(),
         note_dir,
         acct,
         forward_attach
@@ -473,7 +478,7 @@ mod tests {
         let cfg = Config {
             paths: config::Paths {
                 source: Some(source.to_string_lossy().into_owned()),
-                attachments: Some(attachments.to_string_lossy().into_owned()),
+                source_assets: Some(attachments.to_string_lossy().into_owned()),
                 ..Default::default()
             },
             accounts: std::collections::BTreeMap::from([(
@@ -509,7 +514,7 @@ mod tests {
         let cfg = Config {
             paths: config::Paths {
                 source: Some(source.to_string_lossy().into_owned()),
-                attachments: Some(attachments.to_string_lossy().into_owned()),
+                source_assets: Some(attachments.to_string_lossy().into_owned()),
                 ..Default::default()
             },
             accounts: std::collections::BTreeMap::from([(
@@ -531,6 +536,39 @@ mod tests {
         let err = compile(true, None, false, "foo", &cfg).unwrap_err();
         assert!(err.contains("missing required field(s): subject"));
         assert!(!err.contains("account"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn compile_errors_on_bare_attachment_without_source_assets() {
+        let dir = std::env::temp_dir().join(format!("mdmc-compile-{}", uuid::Uuid::new_v4()));
+        let source = dir.join("drafts");
+        std::fs::create_dir_all(&source).unwrap();
+
+        let cfg = Config {
+            paths: config::Paths {
+                source: Some(source.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+            accounts: std::collections::BTreeMap::from([(
+                "rmsams-gmail".to_string(),
+                config::Account {
+                    from: Some("a@b.c".to_string()),
+                    ..Default::default()
+                },
+            )]),
+            ..Default::default()
+        };
+
+        std::fs::write(
+            source.join("foo.md"),
+            "---\ntitle: foo\ntype: mail-draft\nstatus: draft\naccount: rmsams-gmail\nsubject: hi\nto:\n  - x@y.c\nattachments:\n  - report.pdf\n---\n\nbody\n",
+        )
+        .unwrap();
+
+        let err = compile(true, None, false, "foo", &cfg).unwrap_err();
+        assert!(err.contains("bare filename"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -1,8 +1,9 @@
 [paths]
 source = "drafts"
-attachments = "attachments"
-mail = "mail"
 snapshots = "snapshots"
+source-assets = "attachments"
+snapshot-assets = "attachments"
+mail = "mail"
 
 [accounts.dev]
 from = "dev@example.com"

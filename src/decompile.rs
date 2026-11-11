@@ -1,5 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,6 +8,7 @@ use mail_parser::{Message, MessageParser, MessagePart, PartKind};
 use crate::addr::{addresses, format_mailbox};
 use crate::config::Config;
 use crate::frontmatter::{self, Field};
+use crate::util;
 
 /// An attachment: the display name, the MIME content type, the bytes as
 /// written to disk, and the `Content-ID` when it is an inline `cid:` part.
@@ -17,6 +17,7 @@ struct Attachment {
     content_type: String,
     bytes: Vec<u8>,
     content_id: Option<String>,
+    disk: String,
 }
 
 /// Decompile a raw message to a markdown snapshot note. The input is `-`
@@ -39,12 +40,15 @@ pub fn decompile(
         .ok_or("message has no Message-ID header")?
         .to_string();
 
-    let (inline, discrete) = split_attachments(&message);
+    let (mut inline, mut discrete) = split_attachments(&message);
+    assign_disk_names(&mut inline, &message_id, true);
+    assign_disk_names(&mut discrete, &message_id, false);
+
     let cid_map: Vec<(String, String)> = inline
         .iter()
         .filter_map(|a| {
             let cid = a.content_id.clone()?;
-            Some((cid, disk_name(&message_id, &a.name)))
+            Some((cid, a.disk.clone()))
         })
         .collect();
 
@@ -61,7 +65,7 @@ pub fn decompile(
     let all_attachments: Vec<(String, String)> = inline
         .iter()
         .chain(discrete.iter())
-        .map(|a| (disk_name(&message_id, &a.name), a.content_type.clone()))
+        .map(|a| (a.disk.clone(), a.content_type.clone()))
         .collect();
 
     let fields = build_fields(&message, Some(&message_id), &all_attachments);
@@ -69,11 +73,7 @@ pub fn decompile(
     if list_attachments && !listed.is_empty() {
         body_text.push_str("\n## Attachments\n\n");
         for att in &listed {
-            body_text.push_str(&format!(
-                "[{}]({})\n",
-                att.name,
-                disk_name(&message_id, &att.name)
-            ));
+            body_text.push_str(&format!("[{}]({})\n", att.name, att.disk));
         }
     }
     let note = frontmatter::render_note(&fields, body_text.trim_end());
@@ -86,18 +86,17 @@ pub fn decompile(
     let snapshots_dir = cfg.paths_snapshots()?;
     std::fs::create_dir_all(&snapshots_dir)
         .map_err(|e| format!("cannot create {}: {e}", snapshots_dir.display()))?;
-    let path = snapshots_dir.join(format!("{}.md", slug(&message_id)));
+    let path = snapshots_dir.join(format!("{}.md", util::hash_message_id(&message_id)));
     if path.exists() {
         println!("skipped: {} (already exists)", path.display());
         return Ok(());
     }
 
-    let attachments_dir = cfg.paths_attachments()?;
-    std::fs::create_dir_all(&attachments_dir)
-        .map_err(|e| format!("cannot create {}: {e}", attachments_dir.display()))?;
+    let snapshot_assets = cfg.paths_snapshot_assets()?;
+    std::fs::create_dir_all(&snapshot_assets)
+        .map_err(|e| format!("cannot create {}: {e}", snapshot_assets.display()))?;
     for att in inline.iter().chain(discrete.iter()) {
-        let disk = disk_name(&message_id, &att.name);
-        std::fs::write(attachments_dir.join(disk), &att.bytes)
+        std::fs::write(snapshot_assets.join(&att.disk), &att.bytes)
             .map_err(|e| format!("cannot write attachment: {e}"))?;
     }
 
@@ -269,6 +268,7 @@ fn split_attachments(message: &Message) -> (Vec<Attachment>, Vec<Attachment>) {
             content_type: part_content_type(&part),
             bytes: part.decoded().into_owned(),
             content_id: part.content_id().map(str::to_string),
+            disk: String::new(),
         };
         if att.content_id.is_some() && matches!(part.kind(), PartKind::InlineBinary) {
             inline.push(att);
@@ -309,9 +309,32 @@ fn attachment_name(part: &MessagePart) -> Option<String> {
     Some(format!("{cid}.{ext}"))
 }
 
-/// The on-disk filename of an extracted attachment.
-fn disk_name(message_id: &str, name: &str) -> String {
-    format!("{message_id}--{}", sanitize_name(name))
+/// The on-disk filename of an extracted file: `<hash>-<name>` for a discrete
+/// attachment, `cid-<hash>-<name>` for an inline `cid:` asset.
+fn disk_name(message_id: &str, name: &str, inline: bool) -> String {
+    let hash = util::hash_message_id(message_id);
+    let base = sanitize_name(name);
+    if inline {
+        format!("cid-{hash}-{base}")
+    } else {
+        format!("{hash}-{base}")
+    }
+}
+
+/// Assign each attachment its on-disk filename, disambiguating a repeated
+/// sanitised name within a message with a `-2`, `-3`, … suffix.
+fn assign_disk_names(atts: &mut [Attachment], message_id: &str, inline: bool) {
+    let mut seen = HashSet::new();
+    for att in atts.iter_mut() {
+        let base = disk_name(message_id, &att.name, inline);
+        let mut name = base.clone();
+        let mut n = 2;
+        while !seen.insert(name.clone()) {
+            name = format!("{base}-{n}");
+            n += 1;
+        }
+        att.disk = name;
+    }
 }
 
 pub(crate) fn build_fields(
@@ -369,32 +392,6 @@ pub(crate) fn build_fields(
     fields
 }
 
-/// A reversible, filesystem-safe form of a Message-ID. Identity for the common
-/// `[A-Za-z0-9._@+-]` set, percent-encode otherwise, strip a leading `.`, and
-/// truncate ids over 240 characters with an 8-hex hash suffix.
-fn slug(id: &str) -> String {
-    let mut s = String::with_capacity(id.len());
-    for c in id.chars() {
-        if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '@' | '+' | '-') {
-            s.push(c);
-        } else {
-            for b in c.to_string().as_bytes() {
-                s.push_str(&format!("%{b:02X}"));
-            }
-        }
-    }
-    while s.starts_with('.') {
-        s.remove(0);
-    }
-    if s.len() > 240 {
-        let mut hasher = DefaultHasher::new();
-        id.hash(&mut hasher);
-        let h = hasher.finish();
-        s = format!("{}-{:08x}", &s[..240], h & 0xffff_ffff);
-    }
-    s
-}
-
 /// Replace path separators, whitespace, and other filesystem-hostile
 /// characters so an attachment name is a safe single path component.
 fn sanitize_name(name: &str) -> String {
@@ -410,18 +407,6 @@ fn sanitize_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn slug_is_identity_for_common_ids() {
-        assert_eq!(slug("abc.123@example.com"), "abc.123@example.com");
-        assert_eq!(slug("a-b+c_d@host"), "a-b+c_d@host");
-    }
-
-    #[test]
-    fn slug_percent_encodes_and_strips_leading_dot() {
-        assert_eq!(slug(".leading@x"), "leading@x");
-        assert_eq!(slug("a b@x"), "a%20b@x");
-    }
 
     #[test]
     fn sanitize_name_replaces_separators() {
@@ -500,7 +485,15 @@ mod tests {
 
     #[test]
     fn disk_name_prefixes_and_sanitizes() {
-        assert_eq!(disk_name("m1@x", "a/b c.png"), "m1@x--a_b_c.png");
+        let hash = crate::util::hash_message_id("m1@x");
+        assert_eq!(
+            disk_name("m1@x", "a/b c.png", false),
+            format!("{hash}-a_b_c.png")
+        );
+        assert_eq!(
+            disk_name("m1@x", "a/b c.png", true),
+            format!("cid-{hash}-a_b_c.png")
+        );
     }
 
     const SAMPLE: &str = concat!(
@@ -541,7 +534,7 @@ mod tests {
             paths: crate::config::Paths {
                 mail: Some(mail.to_string_lossy().into_owned()),
                 snapshots: Some(snapshots.to_string_lossy().into_owned()),
-                attachments: Some(attachments.to_string_lossy().into_owned()),
+                snapshot_assets: Some(attachments.to_string_lossy().into_owned()),
                 ..Default::default()
             },
             ..Default::default()
@@ -562,24 +555,26 @@ mod tests {
     fn decompile_writes_note_and_attachments() {
         let (dir, cfg, snapshots, attachments) = setup();
         write_sample(&cfg);
+        let hash = crate::util::hash_message_id("m1@example.com");
 
         decompile("m1@example.com", false, true, &cfg).unwrap();
 
-        let note = std::fs::read_to_string(snapshots.join("m1@example.com.md")).unwrap();
+        let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
         assert!(note.contains("title: Report\n"));
         assert!(note.contains("type: mail-snapshot\n"));
         assert!(note.contains("message-id: m1@example.com\n"));
         assert!(note.contains("from: Ann <ann@example.com>\n"));
         assert!(note.contains("to:\n  - Bob <bob@example.com>\n"));
-        assert!(note.contains(
-            "attachments:\n  - file: m1@example.com--report.pdf\n    content-type: application/pdf\n"
-        ));
+        let expected = format!(
+            "attachments:\n  - file: {hash}-report.pdf\n    content-type: application/pdf\n"
+        );
+        assert!(note.contains(expected.as_str()));
         assert!(note.contains("Hello body."));
         assert!(note.contains("## Attachments"));
-        assert!(note.contains("[report.pdf](m1@example.com--report.pdf)"));
+        assert!(note.contains(format!("[report.pdf]({hash}-report.pdf)").as_str()));
 
         assert_eq!(
-            std::fs::read(attachments.join("m1@example.com--report.pdf")).unwrap(),
+            std::fs::read(attachments.join(format!("{hash}-report.pdf"))).unwrap(),
             b"%PDF-1.4\n"
         );
         std::fs::remove_dir_all(&dir).ok();
@@ -589,14 +584,16 @@ mod tests {
     fn decompile_omits_attachments_section_by_default() {
         let (dir, cfg, snapshots, _) = setup();
         write_sample(&cfg);
+        let hash = crate::util::hash_message_id("m1@example.com");
 
         decompile("m1@example.com", false, false, &cfg).unwrap();
 
-        let note = std::fs::read_to_string(snapshots.join("m1@example.com.md")).unwrap();
+        let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
         assert!(!note.contains("## Attachments"));
-        assert!(note.contains(
-            "attachments:\n  - file: m1@example.com--report.pdf\n    content-type: application/pdf\n"
-        ));
+        let expected = format!(
+            "attachments:\n  - file: {hash}-report.pdf\n    content-type: application/pdf\n"
+        );
+        assert!(note.contains(expected.as_str()));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -604,9 +601,10 @@ mod tests {
     fn decompile_is_idempotent() {
         let (dir, cfg, snapshots, _) = setup();
         write_sample(&cfg);
+        let hash = crate::util::hash_message_id("m1@example.com");
 
         decompile("m1@example.com", false, false, &cfg).unwrap();
-        let note_path = snapshots.join("m1@example.com.md");
+        let note_path = snapshots.join(format!("{hash}.md"));
         std::fs::write(&note_path, "sentinel").unwrap();
 
         decompile("m1@example.com", false, false, &cfg).unwrap();
@@ -618,9 +616,10 @@ mod tests {
     fn decompile_stdout_writes_no_files() {
         let (dir, cfg, snapshots, _) = setup();
         write_sample(&cfg);
+        let hash = crate::util::hash_message_id("m1@example.com");
 
         decompile("m1@example.com", true, false, &cfg).unwrap();
-        assert!(!snapshots.join("m1@example.com.md").exists());
+        assert!(!snapshots.join(format!("{hash}.md")).exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 }

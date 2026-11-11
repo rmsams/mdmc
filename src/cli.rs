@@ -144,6 +144,20 @@ pub enum Command {
     },
     /// Print the effective (merged, resolved) config as TOML.
     Config,
+    /// Utility helpers.
+    Utils {
+        #[command(subcommand)]
+        command: UtilCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum UtilCommand {
+    /// Print the snapshot-naming digest of a Message-ID
+    Hash {
+        /// Message-ID (surrounding angle brackets optional)
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]

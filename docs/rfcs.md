@@ -69,10 +69,11 @@ How non-ASCII and over-long parameter values (notably filenames) are encoded
 (`filename*=UTF-8''…` and `parameter*N=` continuation).
 
 - **Decompile** decodes these (`mail-parser`). The decoded filename is honoured: it
-  is sanitised to a single path component, prefixed with `<message-id>--`, and
-  written to `[paths] attachments/`. The extension is just part of that string
-  — it carries no semantic weight; the authoritative type is `Content-Type`,
-  which is what mdmc keys on (e.g. detecting `image/*`), never the extension.
+  is sanitised to a single path component, prefixed with `<hash>-` (inline
+  assets `cid-<hash>-`), and written to `[paths] snapshot-assets/`. The
+  extension is just part of that string — it carries no semantic weight; the
+  authoritative type is `Content-Type`, which is what mdmc keys on (e.g.
+  detecting `image/*`), never the extension.
 
 ## Identifiers
 

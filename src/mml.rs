@@ -93,28 +93,41 @@ pub fn escape_mml(text: &str) -> String {
 /// Resolve a file reference (an embed target or an `attachments` entry) to a
 /// path: `~` against HOME, an absolute path as-is, a relative path with a
 /// separator against the draft's directory, and a bare filename against the
-/// attachments directory.
-pub fn resolve_reference(raw: &str, note_dir: &Path, attachments_dir: &Path) -> PathBuf {
+/// `source-assets` base. Returns `None` for a bare filename with no base set.
+pub fn resolve_reference(raw: &str, note_dir: &Path, base: Option<&Path>) -> Option<PathBuf> {
     let t = raw.trim();
     if t.starts_with('~') {
-        return crate::config::expand_home(t);
+        return Some(crate::config::expand_home(t));
     }
     let p = Path::new(t);
     if p.is_absolute() {
-        PathBuf::from(t)
-    } else if t.contains('/') || t.contains('\\') {
-        note_dir.join(t)
-    } else {
-        attachments_dir.join(t)
+        return Some(PathBuf::from(t));
     }
+    if t.contains('/') || t.contains('\\') {
+        return Some(note_dir.join(t));
+    }
+    base.map(|b| b.join(t))
 }
 
-fn resolve_embed(target: &str, note_dir: &Path, attachments_dir: &Path) -> Option<PathBuf> {
+fn resolve_embed(target: &str, note_dir: &Path, base: Option<&Path>) -> Option<PathBuf> {
     let t = target.trim();
     if t.starts_with("http://") || t.starts_with("https://") || t.starts_with("data:") {
         return None;
     }
-    Some(resolve_reference(t, note_dir, attachments_dir))
+    resolve_reference(t, note_dir, base)
+}
+
+/// Whether a reference is a bare filename — no `~`, scheme, or path separator —
+/// i.e. the only form that needs a `source-assets` base to resolve.
+fn is_bare(t: &str) -> bool {
+    let t = t.trim();
+    !t.starts_with('~')
+        && !t.starts_with("http://")
+        && !t.starts_with("https://")
+        && !t.starts_with("data:")
+        && !Path::new(t).is_absolute()
+        && !t.contains('/')
+        && !t.contains('\\')
 }
 
 fn is_image(path: &Path) -> bool {
@@ -266,7 +279,7 @@ pub fn build_mml_body(
     body: &str,
     cfg: &Config,
     attachments: &[PathBuf],
-    attachments_dir: &Path,
+    source_assets: Option<&Path>,
     note_dir: &Path,
 ) -> Result<(String, Vec<String>), String> {
     let fmt = draft.format();
@@ -294,7 +307,12 @@ pub fn build_mml_body(
     for (start, end, target) in &matches {
         pieces.push(body[last..*start].to_string());
         last = *end;
-        match resolve_embed(target, note_dir, attachments_dir) {
+        if is_bare(target) && source_assets.is_none() {
+            return Err(format!(
+                "embed '{target}' is a bare filename but [paths] source-assets is not set"
+            ));
+        }
+        match resolve_embed(target, note_dir, source_assets) {
             Some(path) if path.is_file() && is_image(&path) => {
                 if fmt == "html" {
                     cid_n += 1;
@@ -589,22 +607,23 @@ mod tests {
         let attach = Path::new("/attachments");
 
         assert_eq!(
-            resolve_reference("foo.png", note, attach),
-            Path::new("/attachments/foo.png")
+            resolve_reference("foo.png", note, Some(attach)),
+            Some(PathBuf::from("/attachments/foo.png"))
         );
         assert_eq!(
-            resolve_reference("sub/foo.png", note, attach),
-            Path::new("/notes/sub/foo.png")
+            resolve_reference("sub/foo.png", note, Some(attach)),
+            Some(PathBuf::from("/notes/sub/foo.png"))
         );
         assert_eq!(
-            resolve_reference("/abs/foo.png", note, attach),
-            Path::new("/abs/foo.png")
+            resolve_reference("/abs/foo.png", note, Some(attach)),
+            Some(PathBuf::from("/abs/foo.png"))
         );
         let home = std::env::var("HOME").unwrap();
         assert_eq!(
-            resolve_reference("~/foo.png", note, attach),
-            PathBuf::from(format!("{home}/foo.png"))
+            resolve_reference("~/foo.png", note, Some(attach)),
+            Some(PathBuf::from(format!("{home}/foo.png")))
         );
+        assert_eq!(resolve_reference("foo.png", note, None), None);
     }
 
     #[test]
@@ -612,15 +631,15 @@ mod tests {
         let note = Path::new("/notes");
         let attach = Path::new("/attachments");
         assert_eq!(
-            resolve_embed("http://example.com/x.png", note, attach),
+            resolve_embed("http://example.com/x.png", note, Some(attach)),
             None
         );
         assert_eq!(
-            resolve_embed("https://example.com/x.png", note, attach),
+            resolve_embed("https://example.com/x.png", note, Some(attach)),
             None
         );
         assert_eq!(
-            resolve_embed("data:image/png;base64,abc", note, attach),
+            resolve_embed("data:image/png;base64,abc", note, Some(attach)),
             None
         );
     }
@@ -630,12 +649,23 @@ mod tests {
         let note = Path::new("/notes");
         let attach = Path::new("/attachments");
         assert_eq!(
-            resolve_embed("foo.png", note, attach),
+            resolve_embed("foo.png", note, Some(attach)),
             Some(PathBuf::from("/attachments/foo.png"))
         );
         assert_eq!(
-            resolve_embed("sub/foo.png", note, attach),
+            resolve_embed("sub/foo.png", note, Some(attach)),
             Some(PathBuf::from("/notes/sub/foo.png"))
         );
+    }
+
+    #[test]
+    fn is_bare_detects_bare_filenames() {
+        assert!(is_bare("foo.png"));
+        assert!(is_bare("  foo.png  "));
+        assert!(!is_bare("sub/foo.png"));
+        assert!(!is_bare("~/foo.png"));
+        assert!(!is_bare("/abs/foo.png"));
+        assert!(!is_bare("http://x/y.png"));
+        assert!(!is_bare("data:image/png;base64,abc"));
     }
 }

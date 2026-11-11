@@ -16,7 +16,7 @@ mod reply;
 mod util;
 mod view;
 
-use cli::{Cli, Command, ListDomain, PickDomain};
+use cli::{Cli, Command, ListDomain, PickDomain, UtilCommand};
 
 use clap::Parser;
 
@@ -108,6 +108,12 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             }
             PickDomain::Snapshots { multi, page_size } => {
                 list::pick_snapshots(multi, page_size.unwrap_or_else(|| cfg.page_size()), cfg)
+            }
+        },
+        Command::Utils { command } => match command {
+            UtilCommand::Hash { id } => {
+                println!("{}", util::hash_message_id(&id));
+                Ok(())
             }
         },
     }
