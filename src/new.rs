@@ -185,7 +185,11 @@ pub fn new(
         }
     }
     if let Some(in_reply_to) = &in_reply_to {
-        fields.push(("in-reply-to".to_string(), Field::Str(in_reply_to.clone())));
+        let irt = in_reply_to
+            .trim()
+            .trim_start_matches('<')
+            .trim_end_matches('>');
+        fields.push(("in-reply-to".to_string(), Field::Str(irt.to_string())));
         fields.push(("quote".to_string(), Field::Str("auto".to_string())));
     }
     if !reply_references.is_empty() {
@@ -393,6 +397,28 @@ mod tests {
         assert!(text.contains("quote: auto\n"));
         assert!(text.contains("references:\n  - m1@example.com\n"));
         assert!(!text.contains("cc:"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn new_reply_strips_brackets_from_in_reply_to() {
+        let (dir, cfg, source) = setup_maildir();
+        run_new(
+            &cfg,
+            Some("<m1@example.com>"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let text = std::fs::read_to_string(source.join("re-lunch.md")).unwrap();
+        assert!(text.contains("in-reply-to: m1@example.com\n"));
+        assert!(!text.contains("in-reply-to: <"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

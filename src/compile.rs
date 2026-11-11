@@ -139,7 +139,13 @@ fn compile_message(
     let cc = &fm.cc.0;
     let bcc = &fm.bcc.0;
     let subject = fm.subject.as_deref().unwrap_or("").trim();
-    let in_reply_to = fm.in_reply_to.as_deref().unwrap_or("").trim();
+    let in_reply_to = fm
+        .in_reply_to
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>');
     let from_hdr = acct.sender();
     let signing_key = acct.signing_key.as_deref();
 
@@ -290,7 +296,14 @@ pub fn compile(
 
     let acct = cfg.resolve_account(account_name.as_deref().unwrap())?;
 
-    let in_reply_to = fm.in_reply_to.as_deref().unwrap_or("").trim().to_string();
+    let in_reply_to = fm
+        .in_reply_to
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>')
+        .to_string();
     let quote = fm.quote.as_deref().unwrap_or("auto").trim();
     let mut body_text = body.trim_matches('\n').to_string();
     if !in_reply_to.is_empty() && quote == "auto" {
