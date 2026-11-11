@@ -41,8 +41,3 @@ Potential feature enhancements and open questions for mdmc. Not scheduled.
   `<hash>-`/`cid-<hash>-` files in `snapshot-assets/` be removed too?
 - **Deep-open link** — the snapshot has no `neomutt:`/deep-open field (kept
   MUA-agnostic); decide whether and how the integration layer re-adds one.
-- **Inline embed syntax** — inline `cid:` images are emitted as standard markdown
-  `![alt](cid-<hash>-<name>)`; the note lives in `snapshots/` while assets live
-  in `snapshot-assets/`, so the bare name does not resolve relative to the note.
-  Confirm the preferred form (relative path vs bare name plus an Obsidian
-  attachment-folder setting).

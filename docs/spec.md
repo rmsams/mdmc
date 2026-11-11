@@ -72,8 +72,11 @@ Quoted reply chains stay in the single body; threads are not split.
 
 Inline `cid:` images are rewritten by a generated Lua filter that walks the
 pandoc AST: `mdmc` emits a temporary filter holding the `cid → filename` map,
-and the filter rewrites `Image` sources before the writer runs. This operates on
-the AST, not the HTML text, so it touches only real image elements.
+and the filter rewrites `Image` nodes before the writer runs. The emitted form
+depends on `link-format`: `wikilink` emits an Obsidian `![[name]]` embed (a
+`RawInline`), `markdown` sets the image `src` so the writer emits
+`![alt](name)`. This operates on the AST, not the HTML text, so it touches only
+real image elements.
 
 ### Attachments
 
@@ -205,12 +208,15 @@ is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
 5. Optionally append a reply quote (resolved by the same lookup `decompile`
    uses, then parsed with `mail-parser`).
 6. Resolve the body through the pandoc AST: parse markdown → JSON (a bare pass,
-   no filters), walk the AST to find `![]()` and `![[…]]` embeds, resolve each
-   to a file (hard error on a bare filename with no `source-assets`, or a file
-   that does not exist), classify image-vs-non-image by extension, and rewrite
-   the AST in place — image embeds become `cid:` srcs, non-image embeds are
-   removed (they become attachments). Render the AST → html/plain/markdown;
-   the lua filter/template/CSS trio applies to html only.
+   no filters), walk the AST to find `Image` embeds, resolve each to a file
+   (hard error on a bare filename with no `source-assets`, or a file that does
+   not exist), classify image-vs-non-image by extension, and rewrite the AST in
+   place — image embeds become `cid:` srcs, non-image embeds are removed (they
+   become attachments). Render the AST → html/plain/markdown; the lua
+   filter/template/CSS trio applies to html only. The reader is
+   `markdown+wikilinks_title_after_pipe` (pandoc ≥ 3) when `link-format` is
+   `wikilink`, so `![[…]]` parses as an `Image` node; under `markdown`,
+   `![[…]]` is literal text.
 7. Build the `multipart/alternative` text body (plain + html) via the
    `mime-meta-language` crate (`compiler` feature only), then assemble the rest
    in Rust with `mail-builder`: wrap in `multipart/related` with the inline
@@ -250,6 +256,7 @@ page_size = 7    # picker rows (default 7)
 css = "email"
 template = "email.html"
 lua-filters = ["email"]
+link-format = "wikilink"    # embed syntax: wikilink (![[...]]) or markdown (![](...))
 
 [[editors]]
 name = "emacs"
@@ -319,6 +326,20 @@ Inline-image resolution runs before the filters: `compile` resolves embeds to
 whose `src` is `cid:img-N`, not the original filename. The trio (including any
 user `lua-filter`) applies to html output only; plain and text render with no
 filter, template, or CSS.
+
+## Link format
+
+`link-format` selects the embed syntax — `wikilink` (`![[…]]`) or `markdown`
+(`![]()`). It resolves as: `decompile --link-format`/`new --link-format` (CLI) →
+draft frontmatter `link-format` → `[defaults] link-format` → `markdown` (the
+built-in default).
+
+- **compile** uses it to pick the pandoc reader: `markdown+wikilinks_title_after_pipe`
+  (pandoc ≥ 3) under `wikilink`, plain `markdown` otherwise. Under `markdown`,
+  `![[…]]` is literal text, so the syntax is never mis-read.
+- **decompile** uses it to emit inline images: `wikilink` emits `![[name]]`,
+  `markdown` emits `![alt](name)`. `view` never rewrites `cid:`, so it is
+  unaffected.
 
 Implementation: embedded assets are materialized to temp files before invoking
 pandoc (its `--template`/`--lua-filter`/`--include-in-header` flags take file

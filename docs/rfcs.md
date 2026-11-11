@@ -83,7 +83,8 @@ Defines the `cid:` (and `mid:`) URI schemes.
 
 - **Compile** emits `Content-ID` for inline images, referenced as `cid:`.
 - **Decompile** rewrites `cid:` image sources to the extracted files (a Lua filter
-  walks the pandoc AST), yielding `![alt](<name>)`.
+  walks the pandoc AST), yielding `![[<name>]]` under `link-format: wikilink`
+  or `![alt](<name>)` under `markdown`.
 
 ## Body formats
 

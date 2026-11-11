@@ -27,8 +27,13 @@ pub fn decompile(
     input: &str,
     stdout: bool,
     list_attachments: bool,
+    link_format: Option<&str>,
     cfg: &Config,
 ) -> Result<(), String> {
+    let wikilinks = link_format
+        .or_else(|| cfg.default_link_format())
+        .unwrap_or("markdown")
+        == "wikilink";
     let raw = resolve_input(input, cfg)?;
     let message = MessageParser::new()
         .parse_owned(raw)
@@ -52,7 +57,7 @@ pub fn decompile(
         })
         .collect();
 
-    let (body, html_rendered) = render_body(&message, &cid_map)?;
+    let (body, html_rendered) = render_body(&message, &cid_map, wikilinks)?;
 
     // Inline images embedded in the body are not re-listed; they appear in the
     // `## Attachments` section only when the text body was rendered instead.
@@ -130,6 +135,7 @@ pub(crate) fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String
 pub(crate) fn render_body(
     message: &Message,
     cid_map: &[(String, String)],
+    wikilinks: bool,
 ) -> Result<(String, bool), String> {
     let has_text = message
         .text_body()
@@ -151,7 +157,7 @@ pub(crate) fn render_body(
             .body_html(0)
             .map(|c| c.into_owned())
             .unwrap_or_default();
-        return Ok((html_to_gfm(&html, cid_map)?, true));
+        return Ok((html_to_gfm(&html, cid_map, wikilinks)?, true));
     }
     Ok((
         message
@@ -162,22 +168,11 @@ pub(crate) fn render_body(
     ))
 }
 
-/// The pandoc Lua filter that rewrites `cid:` image sources to the extracted
-/// filenames. The `cidmap` table is prepended at call time; the `Image` walker
-/// runs on the pandoc AST, so it touches only real image elements.
-const CID_FILTER_BODY: &str = r#"
-function Image(img)
-  local cid = img.src:match('^cid:(.*)$')
-  if cid and cidmap[cid] then
-    img.src = cidmap[cid]
-  end
-  return img
-end
-"#;
-
 /// Build the complete Lua filter source: the `cidmap` table followed by the
-/// AST walker.
-fn build_cid_filter(map: &[(String, String)]) -> String {
+/// AST walker. With `wikilinks`, a `cid:` image is emitted as an Obsidian
+/// `![[…]]` embed; otherwise its `src` is set to the filename, which the gfm
+/// writer renders as `![…](…)`.
+fn build_cid_filter(map: &[(String, String)], wikilinks: bool) -> String {
     let mut src = String::from("local cidmap = {\n");
     for (cid, disk) in map {
         if cid.is_empty() {
@@ -186,7 +181,17 @@ fn build_cid_filter(map: &[(String, String)]) -> String {
         src.push_str(&format!("  [{}] = {},\n", lua_quote(cid), lua_quote(disk)));
     }
     src.push_str("}\n");
-    src.push_str(CID_FILTER_BODY);
+    src.push_str("function Image(img)\n");
+    src.push_str("  local cid = img.src:match('^cid:(.*)$')\n");
+    src.push_str("  if cid and cidmap[cid] then\n");
+    if wikilinks {
+        src.push_str("    return pandoc.RawInline('gfm', '![[' .. cidmap[cid] .. ']]')\n");
+    } else {
+        src.push_str("    img.src = cidmap[cid]\n");
+    }
+    src.push_str("  end\n");
+    src.push_str("  return img\n");
+    src.push_str("end\n");
     src
 }
 
@@ -209,11 +214,15 @@ fn lua_quote(s: &str) -> String {
     out
 }
 
-fn html_to_gfm(html: &str, cid_map: &[(String, String)]) -> Result<String, String> {
+fn html_to_gfm(
+    html: &str,
+    cid_map: &[(String, String)],
+    wikilinks: bool,
+) -> Result<String, String> {
     let mut args: Vec<String> = vec!["-f".into(), "html".into(), "-t".into(), "gfm".into()];
     let mut filter_tmp = None;
     if !cid_map.is_empty() {
-        let path = write_temp_filter(&build_cid_filter(cid_map))?;
+        let path = write_temp_filter(&build_cid_filter(cid_map, wikilinks))?;
         args.push("--lua-filter".into());
         args.push(path.to_string_lossy().into_owned());
         filter_tmp = Some(path);
@@ -447,12 +456,15 @@ mod tests {
             ("logo123".to_string(), "id--a.png".to_string()),
             ("pic 2".to_string(), "id--b.png".to_string()),
         ];
-        let src = build_cid_filter(&map);
-        assert!(src.starts_with("local cidmap = {\n"));
-        assert!(src.contains(r#"["logo123"] = "id--a.png","#));
-        assert!(src.contains(r#"["pic 2"] = "id--b.png","#));
-        assert!(src.contains("function Image(img)"));
-        assert!(src.contains("img.src = cidmap[cid]"));
+        let markdown = build_cid_filter(&map, false);
+        assert!(markdown.starts_with("local cidmap = {\n"));
+        assert!(markdown.contains(r#"["logo123"] = "id--a.png","#));
+        assert!(markdown.contains(r#"["pic 2"] = "id--b.png","#));
+        assert!(markdown.contains("function Image(img)"));
+        assert!(markdown.contains("img.src = cidmap[cid]"));
+
+        let wikilink = build_cid_filter(&map, true);
+        assert!(wikilink.contains("pandoc.RawInline('gfm', '![[' .. cidmap[cid] .. ']]')"));
     }
 
     #[test]
@@ -557,7 +569,7 @@ mod tests {
         write_sample(&cfg);
         let hash = crate::util::hash_message_id("m1@example.com");
 
-        decompile("m1@example.com", false, true, &cfg).unwrap();
+        decompile("m1@example.com", false, true, None, &cfg).unwrap();
 
         let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
         assert!(note.contains("title: Report\n"));
@@ -586,7 +598,7 @@ mod tests {
         write_sample(&cfg);
         let hash = crate::util::hash_message_id("m1@example.com");
 
-        decompile("m1@example.com", false, false, &cfg).unwrap();
+        decompile("m1@example.com", false, false, None, &cfg).unwrap();
 
         let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
         assert!(!note.contains("## Attachments"));
@@ -603,11 +615,11 @@ mod tests {
         write_sample(&cfg);
         let hash = crate::util::hash_message_id("m1@example.com");
 
-        decompile("m1@example.com", false, false, &cfg).unwrap();
+        decompile("m1@example.com", false, false, None, &cfg).unwrap();
         let note_path = snapshots.join(format!("{hash}.md"));
         std::fs::write(&note_path, "sentinel").unwrap();
 
-        decompile("m1@example.com", false, false, &cfg).unwrap();
+        decompile("m1@example.com", false, false, None, &cfg).unwrap();
         assert_eq!(std::fs::read_to_string(&note_path).unwrap(), "sentinel");
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -618,8 +630,58 @@ mod tests {
         write_sample(&cfg);
         let hash = crate::util::hash_message_id("m1@example.com");
 
-        decompile("m1@example.com", true, false, &cfg).unwrap();
+        decompile("m1@example.com", true, false, None, &cfg).unwrap();
         assert!(!snapshots.join(format!("{hash}.md")).exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn decompile_emits_wikilinks() {
+        let dir = std::env::temp_dir().join(format!("mdmc-decompile-wl-{}", uuid::Uuid::new_v4()));
+        let mail = dir.join("mail");
+        let snapshots = dir.join("snapshots");
+        let assets = dir.join("assets");
+        std::fs::create_dir_all(mail.join("rmsams-gmail.com/cur")).unwrap();
+        std::fs::create_dir_all(&snapshots).unwrap();
+        std::fs::create_dir_all(&assets).unwrap();
+        let cfg = Config {
+            paths: crate::config::Paths {
+                mail: Some(mail.to_string_lossy().into_owned()),
+                snapshots: Some(snapshots.to_string_lossy().into_owned()),
+                snapshot_assets: Some(assets.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let raw = concat!(
+            "From: Ann <ann@example.com>\r\n",
+            "To: Bob <bob@example.com>\r\n",
+            "Subject: Pic\r\n",
+            "Message-ID: <m1@x>\r\n",
+            "Content-Type: multipart/related; boundary=\"b\"\r\n",
+            "\r\n",
+            "--b\r\n",
+            "Content-Type: text/html\r\n",
+            "\r\n",
+            "<p>see <img src=\"cid:img1\"></p>\r\n",
+            "--b\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-ID: <img1>\r\n",
+            "Content-Disposition: inline; filename=\"pic.png\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "iVBORw0KGgo=\r\n",
+            "--b--\r\n",
+        );
+        std::fs::write(mail.join("rmsams-gmail.com/cur/msg1"), raw).unwrap();
+
+        decompile("m1@x", false, false, Some("wikilink"), &cfg).unwrap();
+
+        let hash = crate::util::hash_message_id("m1@x");
+        let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
+        assert!(note.contains(&format!("![[cid-{hash}-pic.png]]")));
+
         std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -119,7 +119,7 @@ fn import_draft(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("(no subject)");
-    let (body, _html) = crate::decompile::render_body(&message, &[])?;
+    let (body, _html) = crate::decompile::render_body(&message, &[], false)?;
     let fields = build_draft_fields(&message, id, account);
 
     if let Err(errors) = frontmatter::validate(&frontmatter::to_json(&fields)) {

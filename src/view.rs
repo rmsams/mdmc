@@ -19,7 +19,7 @@ fn render(input: &str, body_only: bool, cfg: &Config) -> Result<String, String> 
         .parse_owned(raw)
         .ok_or("cannot parse message: not a valid RFC 5322 message")?;
 
-    let (body, _) = crate::decompile::render_body(&message, &[])?;
+    let (body, _) = crate::decompile::render_body(&message, &[], false)?;
 
     if body_only {
         Ok(markdown_body(&message, &body))

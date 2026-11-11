@@ -91,6 +91,7 @@ pub fn new(
     css: Option<String>,
     template: Option<String>,
     lua_filter: Option<String>,
+    link_format: Option<String>,
     pandoc_raw: bool,
     sign: bool,
     encrypt: bool,
@@ -210,6 +211,9 @@ pub fn new(
     }
     if let Some(lua_filter) = &lua_filter {
         fields.push(("lua-filter".to_string(), Field::Str(lua_filter.clone())));
+    }
+    if let Some(link_format) = &link_format {
+        fields.push(("link-format".to_string(), Field::Str(link_format.clone())));
     }
     if pandoc_raw {
         fields.push(("pandoc-raw".to_string(), Field::Bool(true)));
@@ -354,6 +358,7 @@ mod tests {
             forward.map(str::to_string),
             None,
             Vec::new(),
+            None,
             None,
             None,
             None,
@@ -591,6 +596,7 @@ mod tests {
             None,
             Some("m1@example.com".to_string()),
             Vec::new(),
+            None,
             None,
             None,
             None,

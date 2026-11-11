@@ -97,6 +97,13 @@
     "lua-filter": {
       "type": "string"
     },
+    "link-format": {
+      "type": "string",
+      "enum": [
+        "wikilink",
+        "markdown"
+      ]
+    },
     "pandoc-raw": {
       "type": "boolean"
     },

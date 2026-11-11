@@ -142,6 +142,8 @@ pub struct Defaults {
         deserialize_with = "de_string_or_list"
     )]
     pub lua_filters: Option<Vec<String>>,
+    #[serde(rename = "link-format")]
+    pub link_format: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -234,6 +236,7 @@ impl Config {
                 css: local.defaults.css.or(global.defaults.css),
                 template: local.defaults.template.or(global.defaults.template),
                 lua_filters: local.defaults.lua_filters.or(global.defaults.lua_filters),
+                link_format: local.defaults.link_format.or(global.defaults.link_format),
             },
             accounts: merge_map(local.accounts, global.accounts),
             editors: if local.editors.is_empty() {
@@ -314,6 +317,10 @@ impl Config {
 
     pub fn default_lua_filters(&self) -> &[String] {
         self.defaults.lua_filters.as_deref().unwrap_or_default()
+    }
+
+    pub fn default_link_format(&self) -> Option<&str> {
+        self.defaults.link_format.as_deref()
     }
 
     /// Resolve a `--folder` target: a `[folders]` registry name or a literal path.

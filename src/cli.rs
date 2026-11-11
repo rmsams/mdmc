@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
@@ -15,6 +15,22 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Command,
+}
+
+/// Embed link format: Obsidian `![[…]]` wikilinks or standard `![]()` markdown.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LinkFormat {
+    Wikilink,
+    Markdown,
+}
+
+impl LinkFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LinkFormat::Wikilink => "wikilink",
+            LinkFormat::Markdown => "markdown",
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -80,6 +96,9 @@ pub enum Command {
         /// Open $EDITOR on the draft after writing
         #[arg(long)]
         editor: bool,
+        /// Embed link format: wikilink (![[...]]) or markdown (![](...))
+        #[arg(long = "link-format")]
+        link_format: Option<LinkFormat>,
     },
     /// Open a draft in $EDITOR, importing it from a drafts maildir when its markdown doesn't exist yet
     Draft {
@@ -116,6 +135,9 @@ pub enum Command {
         /// Append an `## Attachments` section listing extracted files
         #[arg(long = "link-attachments")]
         link_attachments: bool,
+        /// Emit inline images as wikilinks (![[...]]) or markdown (![](...))
+        #[arg(long = "link-format")]
+        link_format: Option<LinkFormat>,
     },
     /// Sync draft status with the maildirs (forward-only)
     ///

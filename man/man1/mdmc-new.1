@@ -4,7 +4,7 @@
 .SH NAME
 mdmc\-new \- Create a new email draft
 .SH SYNOPSIS
-\fBmdmc new\fR [\fB\-\-account\fR] [\fB\-\-config\fR] [\fB\-\-to\fR] [\fB\-\-cc\fR] [\fB\-\-bcc\fR] [\fB\-\-subject\fR] [\fB\-\-reply\fR] [\fB\-\-reply\-all\fR] [\fB\-\-forward\fR] [\fB\-\-forward\-attach\fR] [\fB\-\-attachments\fR] [\fB\-\-body\fR] [\fB\-\-format\fR] [\fB\-\-css\fR] [\fB\-\-template\fR] [\fB\-\-lua\-filter\fR] [\fB\-\-pandoc\-raw\fR] [\fB\-\-sign\fR] [\fB\-\-encrypt\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBmdmc new\fR [\fB\-\-account\fR] [\fB\-\-config\fR] [\fB\-\-to\fR] [\fB\-\-cc\fR] [\fB\-\-bcc\fR] [\fB\-\-subject\fR] [\fB\-\-reply\fR] [\fB\-\-reply\-all\fR] [\fB\-\-forward\fR] [\fB\-\-forward\-attach\fR] [\fB\-\-attachments\fR] [\fB\-\-body\fR] [\fB\-\-format\fR] [\fB\-\-css\fR] [\fB\-\-template\fR] [\fB\-\-lua\-filter\fR] [\fB\-\-pandoc\-raw\fR] [\fB\-\-sign\fR] [\fB\-\-encrypt\fR] [\fB\-\-editor\fR] [\fB\-\-link\-format\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Create a new email draft
 .SH OPTIONS
@@ -68,6 +68,19 @@ Encrypt the message to the recipients
 .TP
 \fB\-\-editor\fR
 Open $EDITOR on the draft after writing
+.TP
+\fB\-\-link\-format\fR \fI<LINK_FORMAT>\fR
+Embed link format: wikilink (![[...]]) or markdown (![](...))
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+wikilink
+.IP \(bu 2
+markdown
+.RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

@@ -4,7 +4,7 @@
 .SH NAME
 mdmc\-decompile \- Decompile a message to a markdown snapshot note
 .SH SYNOPSIS
-\fBmdmc decompile\fR [\fB\-\-config\fR] [\fB\-\-stdout\fR] [\fB\-\-link\-attachments\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
+\fBmdmc decompile\fR [\fB\-\-config\fR] [\fB\-\-stdout\fR] [\fB\-\-link\-attachments\fR] [\fB\-\-link\-format\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
 .SH DESCRIPTION
 Decompile a message to a markdown snapshot note
 .SH OPTIONS
@@ -17,6 +17,19 @@ Print the note to stdout instead of writing to [paths] snapshots
 .TP
 \fB\-\-link\-attachments\fR
 Append an `## Attachments` section listing extracted files
+.TP
+\fB\-\-link\-format\fR \fI<LINK_FORMAT>\fR
+Emit inline images as wikilinks (![[...]]) or markdown (![](...))
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+wikilink
+.IP \(bu 2
+markdown
+.RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

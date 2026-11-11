@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 use serde_json::Value;
 use uuid::Uuid;
@@ -146,9 +147,43 @@ fn run_pandoc(input: &str, args: &[String]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// The installed pandoc version, parsed once from `pandoc --version`.
+fn pandoc_version() -> Option<(u32, u32, u32)> {
+    static VERSION: OnceLock<Option<(u32, u32, u32)>> = OnceLock::new();
+    *VERSION.get_or_init(|| {
+        let out = Command::new("pandoc").arg("--version").output().ok()?;
+        let first = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+        let mut nums = first.split_whitespace().nth(1)?.split('.');
+        let major = nums.next()?.parse().ok()?;
+        let minor = nums.next()?.parse().ok()?;
+        let patch = nums.next().unwrap_or("0").parse().ok()?;
+        Some((major, minor, patch))
+    })
+}
+
 /// Parse markdown to the pandoc JSON AST (bare — no filters, template, or CSS).
-fn pandoc_parse(markdown: &str) -> Result<Value, String> {
-    let args = vec!["-f".into(), "markdown".into(), "-t".into(), "json".into()];
+/// With `wikilinks`, the reader enables `wikilinks_title_after_pipe` (pandoc 3),
+/// so Obsidian `![[…]]` embeds parse as `Image` nodes instead of literal text.
+fn pandoc_parse(markdown: &str, wikilinks: bool) -> Result<Value, String> {
+    let from = if wikilinks {
+        match pandoc_version() {
+            Some((major, _, _)) if major >= 3 => "markdown+wikilinks_title_after_pipe".to_string(),
+            Some(_) => return Err("wikilink embeds require pandoc >= 3.0".to_string()),
+            None => {
+                return Err(
+                    "cannot determine the pandoc version; wikilink embeds require pandoc >= 3.0"
+                        .to_string(),
+                );
+            }
+        }
+    } else {
+        "markdown".to_string()
+    };
+    let args = vec!["-f".into(), from, "-t".into(), "json".into()];
     let out = run_pandoc(markdown, &args)?;
     serde_json::from_str(&out).map_err(|e| format!("cannot parse pandoc JSON: {e}"))
 }
@@ -255,20 +290,6 @@ fn pandoc_render(json: &Value, fmt: &str, cfg: &Config, draft: &Draft) -> Result
     out
 }
 
-/// The target of an Obsidian `![[…]]` embed, i.e. the text of a `Str` node that
-/// is exactly `![[target]]` (optionally with a `|alias` suffix).
-fn obsidian_target(text: &str) -> Option<String> {
-    let t = text.trim();
-    let rest = t.strip_prefix("![[")?;
-    let inner = rest.strip_suffix("]]")?;
-    let target = inner.split('|').next()?.trim();
-    if target.is_empty() {
-        None
-    } else {
-        Some(target.to_string())
-    }
-}
-
 /// The resolution of a single embed target.
 #[derive(Debug)]
 enum Embed {
@@ -316,11 +337,10 @@ fn classify_embed(
 /// Inline image parts: `(cid, path)` pairs.
 type InlineParts = Vec<(String, PathBuf)>;
 
-/// Walk the pandoc JSON AST, resolving every embed (`Image` nodes and
-/// `![[…]]` `Str` nodes) in place. Image embeds (html) become `cid:` srcs;
-/// all other embeds are removed (they become attachments). Returns the inline
-/// `(cid, path)` pairs and the attachment paths discovered from non-image
-/// embeds.
+/// Walk the pandoc JSON AST, resolving every `Image` embed in place. Image
+/// embeds (html) become `cid:` srcs; all other embeds are removed (they become
+/// attachments). Returns the inline `(cid, path)` pairs and the attachment
+/// paths discovered from non-image embeds.
 fn resolve_embeds(
     json: &mut Value,
     note_dir: &Path,
@@ -359,63 +379,32 @@ fn walk(
         }
         Value::Object(map) => {
             let tag = map.get("t").and_then(Value::as_str).map(str::to_string);
-            match tag.as_deref() {
-                Some("Image") => {
-                    if let Some(src) = map
-                        .get("c")
-                        .and_then(|c| c.get(2))
-                        .and_then(|t| t.get(0))
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                    {
-                        match classify_embed(&src, note_dir, source_assets, html)? {
-                            Embed::Inline(path) => {
-                                *cid_n += 1;
-                                let cid = format!("img-{cid_n}");
-                                inline.push((cid.clone(), path));
-                                let c = serde_json::json!([
-                                    ["", [], []],
-                                    [],
-                                    [format!("cid:{cid}"), ""]
-                                ]);
-                                map.insert("c".to_string(), c);
-                            }
-                            Embed::Attach(path) => {
-                                attach.push(path);
-                                map.insert("t".to_string(), Value::String("Str".to_string()));
-                                map.insert("c".to_string(), Value::String(String::new()));
-                            }
-                            Embed::Skip => {}
+            if tag.as_deref() == Some("Image") {
+                if let Some(src) = map
+                    .get("c")
+                    .and_then(|c| c.get(2))
+                    .and_then(|t| t.get(0))
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                {
+                    match classify_embed(&src, note_dir, source_assets, html)? {
+                        Embed::Inline(path) => {
+                            *cid_n += 1;
+                            let cid = format!("img-{cid_n}");
+                            inline.push((cid.clone(), path));
+                            let c =
+                                serde_json::json!([["", [], []], [], [format!("cid:{cid}"), ""]]);
+                            map.insert("c".to_string(), c);
                         }
-                    }
-                    return Ok(());
-                }
-                Some("Str") => {
-                    let text = map.get("c").and_then(Value::as_str).map(str::to_string);
-                    if let Some(target) = text.as_deref().and_then(obsidian_target) {
-                        match classify_embed(&target, note_dir, source_assets, html)? {
-                            Embed::Inline(path) => {
-                                *cid_n += 1;
-                                let cid = format!("img-{cid_n}");
-                                inline.push((cid.clone(), path));
-                                map.insert("t".to_string(), Value::String("Image".to_string()));
-                                let c = serde_json::json!([
-                                    ["", [], []],
-                                    [],
-                                    [format!("cid:{cid}"), ""]
-                                ]);
-                                map.insert("c".to_string(), c);
-                            }
-                            Embed::Attach(path) => {
-                                attach.push(path);
-                                map.insert("c".to_string(), Value::String(String::new()));
-                            }
-                            Embed::Skip => {}
+                        Embed::Attach(path) => {
+                            attach.push(path);
+                            map.insert("t".to_string(), Value::String("Str".to_string()));
+                            map.insert("c".to_string(), Value::String(String::new()));
                         }
-                        return Ok(());
+                        Embed::Skip => {}
                     }
                 }
-                _ => {}
+                return Ok(());
             }
             for val in map.values_mut() {
                 walk(val, note_dir, source_assets, html, inline, attach, cid_n)?;
@@ -441,8 +430,13 @@ pub fn build_mml_body(
     let fmt = draft.format();
     let body = body.trim_end_matches('\n');
     let html = fmt == "html";
+    let link_format = draft
+        .link_format
+        .as_deref()
+        .or_else(|| cfg.default_link_format())
+        .unwrap_or("markdown");
 
-    let mut json = pandoc_parse(body)?;
+    let mut json = pandoc_parse(body, link_format == "wikilink")?;
     let (inline, embed_attach) = resolve_embeds(&mut json, note_dir, source_assets, html)?;
 
     let inner = if fmt == "html" {
@@ -734,21 +728,6 @@ mod tests {
     }
 
     #[test]
-    fn obsidian_target_extracts_target_and_alias() {
-        assert_eq!(obsidian_target("![[foo.png]]"), Some("foo.png".to_string()));
-        assert_eq!(
-            obsidian_target("![[foo.png|alias]]"),
-            Some("foo.png".to_string())
-        );
-        assert_eq!(
-            obsidian_target("![[sub/foo.png]]"),
-            Some("sub/foo.png".to_string())
-        );
-        assert_eq!(obsidian_target("see ![[foo.png]]"), None);
-        assert_eq!(obsidian_target("plain text"), None);
-    }
-
-    #[test]
     fn classify_embed_skips_urls() {
         let note = Path::new("/notes");
         let attach = Path::new("/attachments");
@@ -831,6 +810,7 @@ mod tests {
 
         let draft = Draft {
             format: Some("html".to_string()),
+            link_format: Some("wikilink".to_string()),
             ..Default::default()
         };
         let (mml, inline, attach) = build_mml_body(

@@ -61,6 +61,8 @@ pub struct Draft {
     pub template: Option<String>,
     #[serde(rename = "lua-filter", default)]
     pub lua_filter: Option<String>,
+    #[serde(rename = "link-format", default)]
+    pub link_format: Option<String>,
     #[serde(rename = "pandoc-raw", default)]
     pub pandoc_raw: Option<bool>,
     #[serde(default)]
