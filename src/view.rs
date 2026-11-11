@@ -1,5 +1,3 @@
-use mail_parser::MessageParser;
-
 use crate::addr::{addresses, format_mailbox};
 use crate::config::Config;
 use crate::frontmatter;
@@ -15,9 +13,7 @@ pub fn view(input: &str, body_only: bool, cfg: &Config) -> Result<(), String> {
 
 fn render(input: &str, body_only: bool, cfg: &Config) -> Result<String, String> {
     let raw = crate::decompile::resolve_input(input, cfg)?;
-    let message = MessageParser::new()
-        .parse_owned(raw)
-        .ok_or("cannot parse message: not a valid RFC 5322 message")?;
+    let message = crate::decompile::parse_message(raw)?;
 
     let (body, _) = crate::decompile::render_body(&message, &[], false)?;
 

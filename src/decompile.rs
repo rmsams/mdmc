@@ -35,9 +35,7 @@ pub fn decompile(
         .unwrap_or("markdown")
         == "wikilink";
     let raw = resolve_input(input, cfg)?;
-    let message = MessageParser::new()
-        .parse_owned(raw)
-        .ok_or("cannot parse message: not a valid RFC 5322 message")?;
+    let message = parse_message(raw)?;
     let message_id = message
         .message_id()
         .map(str::trim)
@@ -126,6 +124,19 @@ pub(crate) fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String
     let path = crate::notmuch::resolve(id, Some(&root))
         .ok_or_else(|| format!("message-id '{id}' not found under {}", root.display()))?;
     std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))
+}
+
+/// Parse raw bytes as an RFC 5322 message, rejecting input that is not one. A
+/// valid message always carries a `From` header (RFC 5322 §3.6), so its absence
+/// distinguishes non-message input (e.g. a markdown draft) from real mail.
+pub(crate) fn parse_message(raw: Vec<u8>) -> Result<Message<'static>, String> {
+    let message = MessageParser::new()
+        .parse_owned(raw)
+        .ok_or("cannot parse message: not a valid RFC 5322 message")?;
+    if message.from().is_none() {
+        return Err("not a valid RFC 5322 message (missing From header)".to_string());
+    }
+    Ok(message)
 }
 
 /// Render the message body to markdown: a `text/plain` part verbatim, else a
@@ -681,6 +692,20 @@ mod tests {
         let hash = crate::util::hash_message_id("m1@x");
         let note = std::fs::read_to_string(snapshots.join(format!("{hash}.md"))).unwrap();
         assert!(note.contains(&format!("![[cid-{hash}-pic.png]]")));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn decompile_rejects_non_message_input() {
+        let dir = std::env::temp_dir().join(format!("mdmc-reject-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let draft = dir.join("draft.md");
+        std::fs::write(&draft, "---\ntitle: x\ntype: mail-draft\n---\n\nbody\n").unwrap();
+
+        let cfg = Config::default();
+        let err = decompile(draft.to_str().unwrap(), true, false, None, &cfg).unwrap_err();
+        assert!(err.contains("not a valid RFC 5322 message"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
