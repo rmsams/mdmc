@@ -179,12 +179,43 @@ pub(crate) fn render_body(
     ))
 }
 
-/// Build the complete Lua filter source: the `cidmap` table followed by the
-/// AST walker. With `wikilinks`, a `cid:` image is emitted as an Obsidian
-/// `![[…]]` embed; otherwise its `src` is set to the filename, which the gfm
-/// writer renders as `![…](…)`.
-fn build_cid_filter(map: &[(String, String)], wikilinks: bool) -> String {
-    let mut src = String::from("local cidmap = {\n");
+/// Always-on filter fragment: flatten layout tables into their cell contents
+/// (a table the gfm writer cannot represent is otherwise dropped as a bare
+/// `[TABLE]`), and strip styling — unwrap spans, drop link attributes.
+const TABLE_FLATTEN_LUA: &str = r#"local function add_rows(blocks, rows)
+  for _, row in ipairs(rows) do
+    for _, cell in ipairs(row.cells) do
+      for _, block in ipairs(cell.contents) do
+        table.insert(blocks, block)
+      end
+    end
+  end
+end
+function Table(tbl)
+  local blocks = {}
+  if tbl.head then add_rows(blocks, tbl.head.rows) end
+  for _, body in ipairs(tbl.bodies or {}) do
+    add_rows(blocks, body.head or {})
+    add_rows(blocks, body.body or {})
+  end
+  if tbl.foot then add_rows(blocks, tbl.foot.rows) end
+  return blocks
+end
+function Span(el) return el.content end
+function Link(el) return pandoc.Link(el.content, el.target, el.title) end
+"#;
+
+/// Build the complete Lua filter source: the table-flattening fragment followed
+/// by the `cidmap` table and image walker when there are `cid:` images. With
+/// `wikilinks`, a `cid:` image is emitted as an Obsidian `![[…]]` embed;
+/// otherwise its `src` is set to the filename, which the gfm writer renders as
+/// `![…](…)`.
+fn build_filter(map: &[(String, String)], wikilinks: bool) -> String {
+    let mut src = String::from(TABLE_FLATTEN_LUA);
+    if map.is_empty() {
+        return src;
+    }
+    src.push_str("local cidmap = {\n");
     for (cid, disk) in map {
         if cid.is_empty() {
             continue;
@@ -237,13 +268,9 @@ fn html_to_gfm(
         "gfm-raw_html".into(),
         "--wrap=none".into(),
     ];
-    let mut filter_tmp = None;
-    if !cid_map.is_empty() {
-        let path = write_temp_filter(&build_cid_filter(cid_map, wikilinks))?;
-        args.push("--lua-filter".into());
-        args.push(path.to_string_lossy().into_owned());
-        filter_tmp = Some(path);
-    }
+    let path = write_temp_filter(&build_filter(cid_map, wikilinks))?;
+    args.push("--lua-filter".into());
+    args.push(path.to_string_lossy().into_owned());
 
     let mut child = Command::new("pandoc")
         .args(&args)
@@ -262,9 +289,7 @@ fn html_to_gfm(
         .wait_with_output()
         .map_err(|e| format!("pandoc failed: {e}"))?;
 
-    if let Some(p) = filter_tmp {
-        let _ = std::fs::remove_file(p);
-    }
+    let _ = std::fs::remove_file(&path);
 
     if !out.status.success() {
         return Err(format!(
@@ -468,20 +493,29 @@ mod tests {
     }
 
     #[test]
-    fn build_cid_filter_embeds_map_and_walker() {
+    fn build_filter_flattens_tables_and_maps_cids() {
         let map = vec![
             ("logo123".to_string(), "id--a.png".to_string()),
             ("pic 2".to_string(), "id--b.png".to_string()),
         ];
-        let markdown = build_cid_filter(&map, false);
-        assert!(markdown.starts_with("local cidmap = {\n"));
+        let markdown = build_filter(&map, false);
+        assert!(markdown.starts_with("local function add_rows"));
+        assert!(markdown.contains("function Table(tbl)"));
+        assert!(markdown.contains("function Span(el) return el.content end"));
+        assert!(markdown.contains("function Link(el) return pandoc.Link"));
         assert!(markdown.contains(r#"["logo123"] = "id--a.png","#));
         assert!(markdown.contains(r#"["pic 2"] = "id--b.png","#));
         assert!(markdown.contains("function Image(img)"));
         assert!(markdown.contains("img.src = cidmap[cid]"));
 
-        let wikilink = build_cid_filter(&map, true);
+        let wikilink = build_filter(&map, true);
         assert!(wikilink.contains("pandoc.RawInline('gfm', '![[' .. cidmap[cid] .. ']]')"));
+
+        // No cid map: the flatten fragment stays, but no cidmap/Image function.
+        let empty = build_filter(&[], false);
+        assert!(empty.starts_with("local function add_rows"));
+        assert!(!empty.contains("local cidmap"));
+        assert!(!empty.contains("function Image"));
     }
 
     #[test]
