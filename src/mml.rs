@@ -441,7 +441,10 @@ pub fn build_mml_body(
 
     let inner = if fmt == "html" {
         let rendered = pandoc_render(&json, "html", cfg, draft)?;
-        let plain = escape_mml(body);
+        // The text/plain alternative is a proper plain-text rendering, not the
+        // raw markdown source — otherwise a plain-text client shows literal
+        // `[label](url)` syntax instead of clean text.
+        let plain = escape_mml(&pandoc_render(&json, "plain", cfg, draft)?);
         format!(
             "<#multipart type=alternative>\n{plain}\n<#part type=text/html>\n{rendered}\n<#/part>\n<#/multipart>"
         )
