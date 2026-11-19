@@ -1,0 +1,13 @@
+# tkb collection over the docs/ directory. Root is docs/, so run e.g.
+#   tkb --root docs validate
+# `spec` is unrestricted (it lives at the root); `adr`, `design-doc`, `evidence`,
+# `howto`, and `reference` are zone-pinned so validate enforces the tier layout.
+
+exclude = ["**/_template.md"]
+
+[zones]
+adr = ["adr"]
+design-doc = ["design"]
+evidence = ["evidence"]
+howto = ["howto"]
+reference = ["reference"]

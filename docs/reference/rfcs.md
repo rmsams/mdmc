@@ -1,3 +1,8 @@
+---
+type: reference
+title: "email RFCs and how mdmc handles them"
+---
+
 # Email RFCs
 
 A reference of the RFCs that govern email messages, and how mdmc handles each.

@@ -1,3 +1,8 @@
+---
+type: spec
+title: "mdmc — markdown mail compiler"
+---
+
 # mdmc — design
 
 `mdmc` (markdown mail compiler) is a Rust reimplementation of the Python `mail`
