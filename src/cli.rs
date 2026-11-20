@@ -165,6 +165,25 @@ pub enum Command {
         #[command(subcommand)]
         domain: PickDomain,
     },
+    /// Search the maildir for messages (notmuch search).
+    Search {
+        /// notmuch search query
+        query: String,
+        /// Maximum number of results
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Print a JSON array of { id, date, subject, from } instead of plain ids
+        #[arg(long)]
+        json: bool,
+    },
+    /// Look up addresses from the configured scope (notmuch address).
+    Address {
+        /// Name or partial address to look up; omit to list all in scope
+        query: Option<String>,
+        /// Print a JSON array of { name, address } instead of plain addresses
+        #[arg(long)]
+        json: bool,
+    },
     /// Print the effective (merged, resolved) config as TOML.
     Config,
     /// Print a shipped JSON Schema to stdout.
@@ -177,6 +196,8 @@ pub enum Command {
         /// Message-ID (surrounding angle brackets optional)
         id: String,
     },
+    /// Serve the MCP stdio protocol (JSON-RPC over stdin/stdout).
+    Mcp,
 }
 
 /// A shipped JSON Schema.

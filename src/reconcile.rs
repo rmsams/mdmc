@@ -9,10 +9,10 @@ use crate::frontmatter;
 /// `pending` is not regressed to `draft`, and `sent` is terminal. A message
 /// found in both drafts and sent is marked `sent` with a warning about the
 /// stale drafts copy. Never sends.
-pub fn reconcile(cfg: &Config) -> Result<(), String> {
+pub fn reconcile(cfg: &Config) -> Result<String, String> {
     let source_dir = cfg.paths_source()?;
     let Ok(entries) = std::fs::read_dir(&source_dir) else {
-        return Ok(());
+        return Ok(String::new());
     };
 
     let mut sent: Vec<String> = Vec::new();
@@ -79,24 +79,25 @@ pub fn reconcile(cfg: &Config) -> Result<(), String> {
 
     sent.sort();
     pending.sort();
+    let mut out = String::new();
     if !sent.is_empty() {
-        println!("marked sent:");
+        out.push_str("marked sent:\n");
         for slug in &sent {
-            println!("{slug}");
+            out.push_str(&format!("{slug}\n"));
         }
     }
     if !pending.is_empty() {
-        println!("marked pending:");
+        out.push_str("marked pending:\n");
         for slug in &pending {
-            println!("{slug}");
+            out.push_str(&format!("{slug}\n"));
         }
     }
-    println!(
-        "{} draft(s) marked sent, {} marked pending",
+    out.push_str(&format!(
+        "{} draft(s) marked sent, {} marked pending\n",
         sent.len(),
         pending.len()
-    );
-    Ok(())
+    ));
+    Ok(out)
 }
 
 #[cfg(test)]

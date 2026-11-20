@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::{self, Config};
@@ -229,7 +228,7 @@ pub fn compile(
     again: bool,
     draft_arg: &str,
     cfg: &Config,
-) -> Result<(), String> {
+) -> Result<String, String> {
     if stdout && folder.is_some() {
         return Err("--stdout and --folder are mutually exclusive.".into());
     }
@@ -347,10 +346,7 @@ pub fn compile(
     )?;
 
     if stdout {
-        std::io::stdout()
-            .write_all(message.as_bytes())
-            .map_err(|e| format!("write failed: {e}"))?;
-        return Ok(());
+        return Ok(message);
     }
 
     // Resolve delivery target: --folder, else the account's drafts maildir.
@@ -379,8 +375,7 @@ pub fn compile(
     let dest = maildir_deliver(&target, &message, &message_id)?;
 
     if folder.is_some() {
-        println!("Delivered to {}", dest.display());
-        return Ok(());
+        return Ok(format!("Delivered to {}\n", dest.display()));
     }
 
     let updated = frontmatter::set_fields(
@@ -389,15 +384,14 @@ pub fn compile(
     );
     std::fs::write(&arg, updated).map_err(|e| format!("cannot update draft: {e}"))?;
 
-    println!("Draft compiled: {}", dest.display());
-    println!("Message-ID: {message_id}");
-    println!(
-        "Account: {}  To: {}  Subject: {subject}",
+    Ok(format!(
+        "Draft compiled: {}\nMessage-ID: {}\nAccount: {}  To: {}  Subject: {}\nOpen neomutt Drafts to review and send (press S).\n",
+        dest.display(),
+        message_id,
         acct.from.as_deref().unwrap_or(""),
-        to.join(", ")
-    );
-    println!("Open neomutt Drafts to review and send (press S).");
-    Ok(())
+        to.join(", "),
+        subject
+    ))
 }
 
 #[cfg(test)]

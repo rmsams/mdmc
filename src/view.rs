@@ -6,9 +6,8 @@ use crate::frontmatter;
 /// snapshot note (frontmatter + body); with `body_only`, only a subject/meta
 /// header and the body are printed. Neither mode extracts attachments or
 /// rewrites `cid:` images. Never sends.
-pub fn view(input: &str, body_only: bool, cfg: &Config) -> Result<(), String> {
-    print!("{}", render(input, body_only, cfg)?);
-    Ok(())
+pub fn view(input: &str, body_only: bool, cfg: &Config) -> Result<String, String> {
+    render(input, body_only, cfg)
 }
 
 fn render(input: &str, body_only: bool, cfg: &Config) -> Result<String, String> {

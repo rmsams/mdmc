@@ -29,7 +29,7 @@ pub fn decompile(
     list_attachments: bool,
     link_format: Option<&str>,
     cfg: &Config,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let wikilinks = link_format
         .or_else(|| cfg.default_link_format())
         .unwrap_or("markdown")
@@ -82,8 +82,7 @@ pub fn decompile(
     let note = frontmatter::render_note(&fields, body_text.trim_end());
 
     if stdout {
-        print!("{note}");
-        return Ok(());
+        return Ok(note);
     }
 
     let snapshots_dir = cfg.paths_snapshots()?;
@@ -91,8 +90,7 @@ pub fn decompile(
         .map_err(|e| format!("cannot create {}: {e}", snapshots_dir.display()))?;
     let path = snapshots_dir.join(format!("{}.md", util::hash_message_id(&message_id)));
     if path.exists() {
-        println!("skipped: {} (already exists)", path.display());
-        return Ok(());
+        return Ok(format!("skipped: {} (already exists)\n", path.display()));
     }
 
     let snapshot_assets = cfg.paths_snapshot_assets()?;
@@ -104,8 +102,7 @@ pub fn decompile(
     }
 
     std::fs::write(&path, &note).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-    println!("wrote {}", path.display());
-    Ok(())
+    Ok(format!("wrote {}\n", path.display()))
 }
 
 pub(crate) fn resolve_input(input: &str, cfg: &Config) -> Result<Vec<u8>, String> {

@@ -7,12 +7,14 @@ mod draft;
 mod frontmatter;
 mod list;
 mod maildir;
+mod mcp;
 mod mml;
 mod new;
 mod notmuch;
 mod quote;
 mod reconcile;
 mod reply;
+mod search;
 mod util;
 mod view;
 
@@ -29,13 +31,28 @@ fn main() {
     let cli = Cli::parse();
     let cfg = config::discover(cli.config);
 
-    if let Err(msg) = run(cli.command, &cfg) {
-        eprintln!("Error: {msg}");
-        std::process::exit(1);
+    if matches!(&cli.command, Command::Mcp) {
+        if let Err(msg) = mcp::serve(&cfg) {
+            eprintln!("Error: {msg}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    match run(cli.command, &cfg) {
+        Ok(out) => {
+            use std::io::Write;
+            let mut stdout = std::io::stdout().lock();
+            let _ = stdout.write_all(out.as_bytes());
+        }
+        Err(msg) => {
+            eprintln!("Error: {msg}");
+            std::process::exit(1);
+        }
     }
 }
 
-fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
+fn run(command: Command, cfg: &config::Config) -> Result<String, String> {
     match command {
         Command::New {
             account,
@@ -105,7 +122,7 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
             cfg,
         ),
         Command::Reconcile => reconcile::reconcile(cfg),
-        Command::Config => cfg.to_toml().map(|s| println!("{s}")),
+        Command::Config => cfg.to_toml().map(|s| format!("{s}\n")),
         Command::View { input, body_only } => view::view(&input, body_only, cfg),
         Command::List { domain } => match domain {
             ListDomain::Drafts { json } => list::list_drafts(json, cfg),
@@ -133,17 +150,16 @@ fn run(command: Command, cfg: &config::Config) -> Result<(), String> {
                 cfg,
             ),
         },
+        Command::Search { query, limit, json } => search::search(&query, limit, json),
+        Command::Address { query, json } => search::address(query.as_deref(), json, cfg),
         Command::Schema { schema } => {
             let s = match schema {
                 SchemaType::MailDraft => frontmatter::mail_draft_schema(),
                 SchemaType::MailSnapshot => frontmatter::mail_snapshot_schema(),
             };
-            println!("{s}");
-            Ok(())
+            Ok(format!("{s}\n"))
         }
-        Command::Hash { id } => {
-            println!("{}", util::hash_message_id(&id));
-            Ok(())
-        }
+        Command::Hash { id } => Ok(format!("{}\n", util::hash_message_id(&id))),
+        Command::Mcp => unreachable!("mcp is dispatched before run"),
     }
 }

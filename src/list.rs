@@ -1,5 +1,4 @@
 use std::fmt;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
@@ -188,7 +187,7 @@ pub fn pick_drafts(
     page_size: usize,
     field: Option<&str>,
     cfg: &Config,
-) -> Result<(), String> {
+) -> Result<String, String> {
     if let Some(field) = field {
         validate_field(frontmatter::mail_draft_schema(), field)?;
     }
@@ -196,8 +195,10 @@ pub fn pick_drafts(
     let entries = collect_entries(&dir, false);
     let chosen = select("draft", entries, multi, page_size)?;
     match field {
-        Some(field) => print_values(chosen.iter().map(|e| field_value(e, field))),
-        None => print_values(chosen.into_iter().map(|e| e.path.display().to_string())),
+        Some(field) => Ok(join_lines(chosen.iter().map(|e| field_value(e, field)))),
+        None => Ok(join_lines(
+            chosen.into_iter().map(|e| e.path.display().to_string()),
+        )),
     }
 }
 
@@ -207,7 +208,7 @@ pub fn pick_snapshots(
     page_size: usize,
     field: Option<&str>,
     cfg: &Config,
-) -> Result<(), String> {
+) -> Result<String, String> {
     if let Some(field) = field {
         validate_field(frontmatter::mail_snapshot_schema(), field)?;
     }
@@ -215,13 +216,15 @@ pub fn pick_snapshots(
     let entries = collect_entries(&dir, true);
     let chosen = select("snapshot", entries, multi, page_size)?;
     match field {
-        Some(field) => print_values(chosen.iter().map(|e| field_value(e, field))),
-        None => print_values(chosen.into_iter().map(|e| e.path.display().to_string())),
+        Some(field) => Ok(join_lines(chosen.iter().map(|e| field_value(e, field)))),
+        None => Ok(join_lines(
+            chosen.into_iter().map(|e| e.path.display().to_string()),
+        )),
     }
 }
 
 /// `list drafts`: print draft paths, or a JSON array with `--json`.
-pub fn list_drafts(json: bool, cfg: &Config) -> Result<(), String> {
+pub fn list_drafts(json: bool, cfg: &Config) -> Result<String, String> {
     let dir = cfg.paths_source()?;
     let entries = collect_entries(&dir, false);
     if json {
@@ -235,9 +238,11 @@ pub fn list_drafts(json: bool, cfg: &Config) -> Result<(), String> {
                 })
             })
             .collect();
-        return println_json(&out);
+        return format_json(&out);
     }
-    print_values(entries.iter().map(|e| e.path.display().to_string()))
+    Ok(join_lines(
+        entries.iter().map(|e| e.path.display().to_string()),
+    ))
 }
 
 fn pick_one<T: fmt::Display>(
@@ -272,24 +277,24 @@ fn pick_many<T: fmt::Display>(
     Ok(selected)
 }
 
-fn print_values(values: impl Iterator<Item = String>) -> Result<(), String> {
-    let mut out = std::io::stdout().lock();
+fn join_lines(values: impl Iterator<Item = String>) -> String {
+    let mut out = String::new();
     for value in values {
-        writeln!(out, "{value}").map_err(|e| format!("write failed: {e}"))?;
+        out.push_str(&value);
+        out.push('\n');
     }
-    Ok(())
+    out
 }
 
-fn println_json(value: &[serde_json::Value]) -> Result<(), String> {
-    println!(
-        "{}",
+fn format_json(value: &[serde_json::Value]) -> Result<String, String> {
+    Ok(format!(
+        "{}\n",
         serde_json::to_string(value).map_err(|e| format!("json: {e}"))?
-    );
-    Ok(())
+    ))
 }
 
 /// `list snapshots`: print snapshot paths, or a JSON array with `--json`.
-pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
+pub fn list_snapshots(json: bool, cfg: &Config) -> Result<String, String> {
     let dir = cfg.paths_snapshots()?;
     let entries = collect_entries(&dir, true);
     if json {
@@ -304,9 +309,11 @@ pub fn list_snapshots(json: bool, cfg: &Config) -> Result<(), String> {
                 })
             })
             .collect();
-        return println_json(&out);
+        return format_json(&out);
     }
-    print_values(entries.iter().map(|e| e.path.display().to_string()))
+    Ok(join_lines(
+        entries.iter().map(|e| e.path.display().to_string()),
+    ))
 }
 
 #[cfg(test)]

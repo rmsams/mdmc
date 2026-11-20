@@ -96,7 +96,7 @@ pub fn new(
     sign: bool,
     encrypt: bool,
     editor: bool,
-) -> Result<(), String> {
+) -> Result<String, String> {
     if let Some(fmt) = &format {
         if !matches!(fmt.as_str(), "text" | "html" | "plain") {
             return Err("--format must be one of text, html, plain.".into());
@@ -259,8 +259,7 @@ pub fn new(
         }
     }
 
-    println!("{}", path.display());
-    Ok(())
+    Ok(format!("{}\n", path.display()))
 }
 
 #[cfg(test)]
@@ -349,7 +348,7 @@ mod tests {
         cc: Option<&str>,
         bcc: Option<&str>,
         subject: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         new(
             cfg,
             Some("test".to_string()),

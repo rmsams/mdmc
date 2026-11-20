@@ -98,17 +98,35 @@ pub struct Config {
     pub editors: Vec<Editor>,
     #[serde(default, skip_serializing_if = "Lookup::is_empty")]
     pub lookup: Lookup,
+    #[serde(default, skip_serializing_if = "Mcp::is_empty")]
+    pub mcp: Mcp,
 }
 
-/// Defaults for the `list`/`pick` commands (picker page size).
+/// MCP server settings.
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct Mcp {
+    #[serde(default)]
+    pub instructions: Option<String>,
+}
+
+impl Mcp {
+    fn is_empty(&self) -> bool {
+        self.instructions.is_none()
+    }
+}
+
+/// Lookup behaviour: the picker page size and the notmuch scope for address
+/// lookup.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Lookup {
     pub page_size: Option<usize>,
+    #[serde(rename = "address-query")]
+    pub address_query: Option<String>,
 }
 
 impl Lookup {
     fn is_empty(&self) -> bool {
-        self.page_size.is_none()
+        self.page_size.is_none() && self.address_query.is_none()
     }
 }
 
@@ -246,6 +264,10 @@ impl Config {
             },
             lookup: Lookup {
                 page_size: local.lookup.page_size.or(global.lookup.page_size),
+                address_query: local.lookup.address_query.or(global.lookup.address_query),
+            },
+            mcp: Mcp {
+                instructions: local.mcp.instructions.or(global.mcp.instructions),
             },
         }
     }
@@ -301,6 +323,17 @@ impl Config {
     /// The picker page size (`[lookup] page_size`, default 7).
     pub fn page_size(&self) -> usize {
         self.lookup.page_size.unwrap_or(7)
+    }
+
+    /// The notmuch scope for `mdmc address` (`[lookup] address-query`), or
+    /// `None` to derive it from the accounts' `from` addresses.
+    pub fn address_query(&self) -> Option<&str> {
+        self.lookup.address_query.as_deref()
+    }
+
+    /// The extra MCP instructions (`[mcp] instructions`), if any.
+    pub fn mcp_instructions(&self) -> Option<&str> {
+        self.mcp.instructions.as_deref()
     }
 
     pub fn default_account(&self) -> Option<&str> {

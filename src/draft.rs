@@ -18,7 +18,7 @@ pub fn draft(
     editor: Option<&str>,
     compile: bool,
     cfg: &Config,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let path = match input {
         Some(arg) => resolve_draft_or_create(arg, cfg)?,
         None => crate::list::pick_draft_path(cfg.page_size(), cfg)?,
@@ -26,11 +26,9 @@ pub fn draft(
     let command = cfg.editor(editor)?;
     crate::util::run_editor_command(&command, &path);
     if compile {
-        crate::compile::compile(false, None, false, &path.display().to_string(), cfg)?;
-    } else {
-        println!("{}", path.display());
+        return crate::compile::compile(false, None, false, &path.display().to_string(), cfg);
     }
-    Ok(())
+    Ok(format!("{}\n", path.display()))
 }
 
 /// Resolve an input to a draft path: an existing file (slug or path), a

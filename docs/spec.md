@@ -41,7 +41,12 @@ extraction and no `cid:` rewriting: by default a full snapshot note (frontmatter
 terminal-reader mode. `mdmc config` prints the effective (merged, resolved)
 config as TOML. `mdmc schema <type>` prints a shipped JSON Schema to stdout
 (`mail-draft` or `mail-snapshot`). `mdmc hash <id>` prints the snapshot-naming
-digest of a Message-ID. None of them ever send.
+digest of a Message-ID. `mdmc search <query>` searches messages via notmuch and
+prints their Message-IDs (with `--json`, a `{ id, date, subject, from }` array);
+`mdmc address [query]` looks up addresses from the configured scope (see
+Search and address), printing `Name <addr>` lines (with `--json`, a
+`{ name, address }` array). `mdmc mcp` serves the MCP stdio protocol (see MCP
+server), exposing the same operations as tools. None of them ever send.
 
 ## Decompile
 
@@ -198,10 +203,30 @@ per line (comma-joining is not useful for paths). Drafts are read from
 filename, so hashed names do not affect the picker; `--json` also emits
 `message-id`). The picker page size defaults to `[lookup] page_size` (default 7).
 
-Message and address lookup are deliberately out of scope. Message-id picking is
-`mfzf` (a home-manager shell helper over `notmuch search`), and address picking
-is `maddr` (`~/git/pers/maddr`) — a separate Rust tool that indexes the
-`To`/`Cc`/`Bcc` recipients of sent mail.
+The interactive pickers remain external: message-id picking is `mfzf` (a
+home-manager shell helper over `notmuch search`), and address picking is `maddr`
+(`~/git/pers/maddr`) — a separate Rust tool that indexes the `To`/`Cc`/`Bcc`
+recipients of sent mail into SQLite for instant picking. Message search and
+address lookup as queryable commands are `mdmc search` and `mdmc address` (see
+Search and address).
+
+## Search and address
+
+`mdmc search <query>` runs `notmuch search --format=json <query>` (optionally
+`--limit N`) and prints the matched Message-IDs one per line, or with `--json` a
+JSON array of `{ id, date, subject, from }` (`id` is the `id:`-stripped
+Message-ID, `date` the `YYYY-MM-DD` of the message timestamp). `mdmc address
+[query]` runs `notmuch address --format=json --deduplicate=address <scope>` and
+prints `Name <addr>` lines, or with `--json` a JSON array of `{ name, address }`;
+the optional `query` filters client-side, keeping entries whose name or address
+contains every query word (case-insensitive).
+
+The `<scope>` is the `[lookup] address-query` config value when set; otherwise
+it is derived from `[accounts].from` as a `from:` OR-query, scoping address
+lookup to messages you have sent (a `*` fallback when no account has an
+address). The derivation avoids the naive full-index `notmuch address *`, which
+reads every message file (recipient addresses are not cached in the notmuch
+database) and returns addresses you would never email.
 
 ## Compile pipeline
 
@@ -257,6 +282,10 @@ refs = "~/Mail/rmsams-gmail.com/Reference"
 
 [lookup]
 page_size = 7    # picker rows (default 7)
+address-query = "from:rmsams@gmail.com"    # optional notmuch scope for `mdmc address` (default: derived from [accounts].from)
+
+[mcp]
+instructions = "~/.config/mdmc/instructions.md"    # optional: literal string, or a path to a markdown file (appended to the MCP instructions)
 
 [defaults]
 css = "email"
@@ -383,9 +412,11 @@ so external tooling can consume the contract without reading the source tree.
 - `new.rs` — the `new` subcommand (draft creation).
 - `mml.rs` — MML body construction + `compile_mml` (the mml crate).
 - `maildir.rs` — maildir delivery/dedup helpers and the Message-ID scan fallback.
-- `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve only).
+- `mcp.rs` — the MCP stdio server (JSON-RPC loop, tool schemas, tool dispatch).
+- `notmuch.rs` — the notmuch subprocess wrapper (`mid:` resolve, search, and address).
 - `quote.rs` — reply quoting and forward embedding (notmuch resolve + `mail-parser`).
 - `reply.rs` — reply envelope resolution (recipients + subject).
+- `search.rs` — the `search`/`address` subcommands (notmuch search/address, address scope derivation + client-side filter).
 - `util.rs` — hostname and Message-ID generation.
 - `view.rs` — the `view` subcommand (markdown rendering to stdout).
 
@@ -467,6 +498,20 @@ optionally encrypts (serialize again → `gpg --encrypt
 ### Schema
 
 Added optional `sign` and `encrypt` booleans to `mail-draft.schema.json`.
+
+## MCP server
+
+`mdmc mcp` serves the Model Context Protocol over stdio (newline-delimited
+JSON-RPC). It exposes nine tools — `compose`, `reply`, `forward`, `write`
+(`compile`), `decompile`, `view`, `search`, `address`, and `list_accounts` —
+mirroring the commands, with `list_accounts` enumerating `[accounts]`. Tool
+input schemas are derived from serde structs with `schemars` (no hand-written
+schema), and tool calls invoke the same library functions as the CLI
+(`invocation: library`).
+
+The server returns an `instructions` block at `initialize`: an embedded
+save-only contract plus any `[mcp] instructions` config value (a literal
+string, or the file's contents when the value names an existing file).
 
 ## Deferred
 
