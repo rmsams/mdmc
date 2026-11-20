@@ -29,7 +29,13 @@ fn main() {
     }
 
     let cli = Cli::parse();
-    let cfg = config::discover(cli.config);
+    let cfg = match config::discover(cli.config) {
+        Ok(cfg) => cfg,
+        Err(msg) => {
+            eprintln!("Error: {msg}");
+            std::process::exit(1);
+        }
+    };
 
     if matches!(&cli.command, Command::Mcp) {
         if let Err(msg) = mcp::serve(&cfg) {

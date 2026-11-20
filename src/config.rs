@@ -40,17 +40,18 @@ fn merge_map<K: Ord, V>(local: BTreeMap<K, V>, global: BTreeMap<K, V>) -> BTreeM
     merged
 }
 
-/// Discover the effective config: an explicit `--config` path wins; otherwise a
-/// local `.mdmc.toml` (found by walking up from the current directory) is
-/// merged over the global `~/.config/mdmc/config.toml`.
-pub fn discover(flag: Option<PathBuf>) -> Config {
+/// Discover the effective config: an explicit `--config` path wins (and must
+/// exist and parse); otherwise a local `.mdmc.toml` (found by walking up from
+/// the current directory) is merged over the global
+/// `~/.config/mdmc/config.toml`.
+pub fn discover(flag: Option<PathBuf>) -> Result<Config, String> {
     if let Some(path) = flag {
-        return Config::load(&path);
+        return Config::load_strict(&path);
     }
     let global = Config::load(&expand_home("~/.config/mdmc/config.toml"));
     match find_local_config() {
-        Some(local_path) => Config::merge(Config::load(&local_path), global),
-        None => global,
+        Some(local_path) => Ok(Config::merge(Config::load(&local_path), global)),
+        None => Ok(global),
     }
 }
 
@@ -193,13 +194,20 @@ impl Account {
 
 impl Config {
     pub fn load(path: &Path) -> Config {
-        let mut cfg: Config = std::fs::read_to_string(path)
-            .ok()
-            .and_then(|text| toml::from_str(&text).ok())
-            .unwrap_or_default();
+        Self::load_strict(path).unwrap_or_default()
+    }
+
+    /// Load a config file, failing on a missing file or a parse error (used for
+    /// an explicit `--config` path, where silently falling back to defaults
+    /// would hide a typo or an unset-up dev environment).
+    fn load_strict(path: &Path) -> Result<Config, String> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read config {}: {e}", path.display()))?;
+        let mut cfg: Config = toml::from_str(&text)
+            .map_err(|e| format!("cannot parse config {}: {e}", path.display()))?;
         let base = path.parent().unwrap_or_else(|| Path::new("."));
         cfg.resolve_paths(base);
-        cfg
+        Ok(cfg)
     }
 
     /// Resolve all path-valued fields against `base`, so the config holds
@@ -462,6 +470,13 @@ lua-filters = ["email"]
     fn resolve_account_missing_errors() {
         let cfg = Config::default();
         assert!(cfg.resolve_account("nope").is_err());
+    }
+
+    #[test]
+    fn discover_errors_on_missing_explicit_config() {
+        let missing = std::env::temp_dir().join(format!("mdmc-none-{}.toml", uuid::Uuid::new_v4()));
+        let err = discover(Some(missing)).unwrap_err();
+        assert!(err.contains("cannot read config"));
     }
 
     #[test]
