@@ -216,17 +216,19 @@ Search and address).
 `--limit N`) and prints the matched Message-IDs one per line, or with `--json` a
 JSON array of `{ id, date, subject, from }` (`id` is the `id:`-stripped
 Message-ID, `date` the `YYYY-MM-DD` of the message timestamp). `mdmc address
-[query]` runs `notmuch address --format=json --deduplicate=address <scope>` and
-prints `Name <addr>` lines, or with `--json` a JSON array of `{ name, address }`;
-the optional `query` filters client-side, keeping entries whose name or address
-contains every query word (case-insensitive).
+[query]` runs `notmuch address --format=json --deduplicate=address
+--output=recipients <scope>` and prints `Name <addr>` lines, or with `--json` a
+JSON array of `{ name, address }`; the optional `query` filters client-side,
+keeping entries whose name or address contains every query word (case-insensitive).
 
 The `<scope>` is the `[lookup] address-query` config value when set; otherwise
 it is derived from `[accounts].from` as a `from:` OR-query, scoping address
 lookup to messages you have sent (a `*` fallback when no account has an
-address). The derivation avoids the naive full-index `notmuch address *`, which
-reads every message file (recipient addresses are not cached in the notmuch
-database) and returns addresses you would never email.
+address). The `--output=recipients` flag selects `To`/`Cc`/`Bcc` addresses (the
+default is `sender`, which would list only yourself); the derivation avoids the
+naive full-index `notmuch address *`, which reads every message file (recipient
+addresses are not cached in the notmuch database) and returns addresses you
+would never email.
 
 ## Compile pipeline
 

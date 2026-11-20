@@ -88,6 +88,7 @@ fn address_with(bin: &str, query: &str) -> Result<Vec<AddressEntry>, String> {
         "address".to_string(),
         "--format=json".to_string(),
         "--deduplicate=address".to_string(),
+        "--output=recipients".to_string(),
         query.to_string(),
     ];
     let out = run(bin, &args)?;
@@ -172,6 +173,19 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "Ann");
         assert_eq!(entries[0].address, "ann@x");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn address_requests_recipients() {
+        let dir = std::env::temp_dir().join(format!("mdmc-notmuch-r-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = fake_notmuch(
+            &dir,
+            "case \" $* \" in *\" --output=recipients \"*) echo '[{\"name\":\"Ann\",\"address\":\"ann@x\"}]';; *) echo 'missing --output=recipients'; exit 1;; esac",
+        );
+        let entries = address_with(script.to_str().unwrap(), "from:me").unwrap();
+        assert_eq!(entries.len(), 1);
         std::fs::remove_dir_all(&dir).ok();
     }
 }
