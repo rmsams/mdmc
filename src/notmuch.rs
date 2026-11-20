@@ -96,23 +96,50 @@ fn address_with(bin: &str, query: &str) -> Result<Vec<AddressEntry>, String> {
 }
 
 /// Run a notmuch subcommand, returning its stdout (stderr on failure).
+///
+/// Retries a bounded number of times on `ETXTBSY` ("Text file busy"), which the
+/// kernel can return transiently when executing a freshly-written file (the
+/// test suite's fake-notmuch scripts hit this under parallel threads).
 fn run(bin: &str, args: &[String]) -> Result<String, String> {
-    let out = std::process::Command::new(bin)
-        .args(args)
-        .output()
-        .map_err(|e| format!("{bin} failed to start: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "{bin} failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
+    let mut attempt = 0;
+    loop {
+        let out = std::process::Command::new(bin).args(args).output();
+        match out {
+            Ok(out) => {
+                if !out.status.success() {
+                    return Err(format!(
+                        "{bin} failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ));
+                }
+                return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+            }
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < 5 => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
+            }
+            Err(e) => return Err(format!("{bin} failed to start: {e}")),
+        }
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Write an executable `sh` script.
+    fn write_script(path: &Path, body: &str) {
+        use std::io::Write;
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(format!("#!/bin/sh\n{body}\n").as_bytes())
+            .unwrap();
+        drop(file);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
 
     /// A fake notmuch that answers `search --output=files --limit=1 mid:X`.
     #[test]
@@ -120,16 +147,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("mdmc-notmuch-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let script = dir.join("notmuch");
-        std::fs::write(
+        write_script(
             &script,
-            "#!/bin/sh\nif [ \"$1\" = search ] && [ \"$2\" = --output=files ]; then echo /mail/cur/msg1; fi\n",
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+            "if [ \"$1\" = search ] && [ \"$2\" = --output=files ]; then echo /mail/cur/msg1; fi",
+        );
 
         assert_eq!(
             resolve_message_id_with(script.to_str().unwrap(), "abc@x"),
@@ -140,12 +161,7 @@ mod tests {
 
     fn fake_notmuch(dir: &Path, body: &str) -> std::path::PathBuf {
         let script = dir.join("notmuch");
-        std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        write_script(&script, body);
         script
     }
 
